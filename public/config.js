@@ -2,10 +2,6 @@
 // Ces valeurs sont chargées une seule fois au démarrage
 export const clientConfig = {
   game: {
-    pixelSize: 40,
-    map: {
-      width: 40,
-      height: 30
-    }
+    pixelSize: 40
   }
 };

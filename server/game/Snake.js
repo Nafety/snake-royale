@@ -2,7 +2,7 @@ class Snake {
   constructor(config) {
     this.body = [ { ...config.game.snake.startPos } ];
     this.length = config.game.snake.startLength;
-    this.dir = { x: 1, y: 0 };
+    this.dir = { x: 0, y: 0 };
   }
 
   setDirection(dir) {
@@ -20,8 +20,8 @@ class Snake {
 
   move(config) {
     const head = this.head();
-    let nextX = head.x + this.dir.x;    // +1 cellule grille au lieu de +pixelSize
-    let nextY = head.y + this.dir.y;    // +1 cellule grille au lieu de +pixelSize
+    let nextX = head.x + this.dir.x;    
+    let nextY = head.y + this.dir.y;    
 
     // === Wrapping ===
     const maxX = config.game.map.width;
@@ -45,8 +45,8 @@ class Snake {
 
   reset(config) {
     this.body = [ { ...config.game.snake.startPos } ];
-    this.length = config.game.snake.startLength;
-    this.dir = { x: 1, y: 0 };
+    this.length = config.game.snake.startLength;  
+    this.dir = { x: 0, y: 0 };
   }
 
   head() {
