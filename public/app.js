@@ -1,11 +1,19 @@
 import { GameScene } from './game/GameScene.js';
+import { clientConfig } from './config.js';
 
 console.log('🚀 App.js chargé');
 
+const gameWidth = clientConfig.game.map.width * clientConfig.game.pixelSize;
+const gameHeight = clientConfig.game.map.height * clientConfig.game.pixelSize;
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  width: 800,
-  height: 600,
+  width: gameWidth,
+  height: gameHeight,
   backgroundColor: '#111',
-  scene: GameScene
+  scene: GameScene,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  }
 });

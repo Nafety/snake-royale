@@ -4,7 +4,7 @@ export const clientConfig = {
   game: {
     pixelSize: 40,
     map: {
-      width: 30,
+      width: 40,
       height: 30
     }
   }

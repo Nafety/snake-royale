@@ -5,7 +5,6 @@ module.exports = {
   },
 
   game: {
-    pixelSize: 20,    // chaque cellule grille = 20px (pour conversion frontend)
     map: {
       width: 40,      // 40 cellules en grille
       height: 30      // 30 cellules en grille
