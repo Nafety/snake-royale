@@ -1,74 +1,112 @@
+// server/socket/socketHandler.js
 const GameRoom = require('../game/GameRoom');
-const config = require('../config');
+const path = require('path');
 
-let waitingRoom = null;
-const rooms = {};
+const rooms = {}; // toutes les rooms actives { roomId: GameRoom }
+const waitingRooms = {}; // rooms en attente par mode { mode: GameRoom }
 
-module.exports = function(io) {
+module.exports = function(io, sessionMiddleware) {
+  // Partager la session avec Socket.IO
+  io.use((socket, next) => {
+    sessionMiddleware(socket.request, {}, next);
+  });
+
   io.on('connection', socket => {
-    console.log('Player connected', socket.id);
+    console.log('🟢 Player connected', socket.id);
 
-    socket.on('joinGame', () => {
-      let room;
+    // ================= JOIN GAME =================
+    socket.on('joinGame', (mode = 'classic') => {
+      const session = socket.request.session;
 
-      // Si une room est en attente → rejoindre
-      if (waitingRoom && !waitingRoom.started) {
-        room = waitingRoom;
-        room.addPlayer(socket.id);
-        socket.join(room.id);
+      // Charger la config du mode
+      try {
+        const configPath = path.join(__dirname, '..', 'configs', `${mode}.js`);
+        const gameConfig = require(configPath);
 
-        room.started = true;
-        waitingRoom = null;
+        session.gameMode = mode;
+        session.gameConfig = gameConfig;
+        session.save();
 
-        // Envoyer start avec les ids des joueurs
-        Object.keys(room.snakes).forEach(id => {
-          io.to(id).emit('start', { playerId: id });
-        });
+        console.log(`Player ${socket.id} joined mode: ${mode}`);
 
-        // Lancer game loop pour la room
-        room.interval = setInterval(() => {
-          room.update();
-          io.to(room.id).emit('state', room.getState());
-        }, config.server.tickRate);
+        let room;
 
-      } else {
-        // créer nouvelle room et mettre en attente
-        const roomId = `room-${Date.now()}`;
-        room = new GameRoom();
-        room.id = roomId;
-        room.addPlayer(socket.id);
-        socket.join(room.id);
-        rooms[roomId] = room;
+        // Vérifier s'il y a une room en attente pour ce mode
+        if (waitingRooms[mode] && !waitingRooms[mode].started) {
+          room = waitingRooms[mode];
+          room.addPlayer(socket.id);
+          socket.join(room.id);
 
-        room.started = false;
-        waitingRoom = room;
+          room.started = true;
+          waitingRooms[mode] = null;
 
-        // envoyer juste le playerId pour que le client sache qui il est
-        socket.emit('start', { playerId: socket.id });
+          // Prévenir tous les joueurs que la partie démarre
+          Object.keys(room.snakes).forEach(id => {
+            io.to(id).emit('start', {
+              playerId: id,
+              config: room.config
+            });
+          });
+
+          // Lancer la game loop
+          room.interval = setInterval(() => {
+            room.update();
+            io.to(room.id).emit('state', room.getState());
+          }, room.config.server.tickRate);
+
+        } else {
+          // Créer une nouvelle room et la mettre en attente
+          const roomId = `room-${Date.now()}`;
+          room = new GameRoom(gameConfig);
+          room.config = gameConfig;
+          room.id = roomId;
+          room.started = false;
+
+          room.addPlayer(socket.id);
+          socket.join(room.id);
+
+          rooms[roomId] = room;
+          waitingRooms[mode] = room;
+
+          // Envoyer uniquement l'id + config au joueur
+          socket.emit('start', {
+            playerId: socket.id,
+            config: room.config
+          });
+        }
+
+      } catch (err) {
+        console.error(`Erreur loading config pour le mode ${mode}:`, err);
+        socket.emit('error', { message: 'Mode de jeu invalide' });
       }
     });
 
-    // Réception de l'input
+    // ================= INPUT =================
     socket.on('input', dir => {
       const room = Object.values(rooms).find(r => r.snakes[socket.id]);
       if (room) room.setInput(socket.id, dir);
     });
 
-    // Déconnexion
+    // ================= DISCONNECT =================
     socket.on('disconnect', () => {
       const room = Object.values(rooms).find(r => r.snakes[socket.id]);
-      if (room) {
-        room.removePlayer(socket.id);
+      if (!room) return;
 
-        if (Object.keys(room.snakes).length === 0) {
-          clearInterval(room.interval);
-          delete rooms[room.id];
-        } else if (room.started && Object.keys(room.snakes).length === 1) {
-          // Si reste un joueur, on remet en attente
-          waitingRoom = room;
-          room.started = false;
-          clearInterval(room.interval);
-        }
+      room.removePlayer(socket.id);
+
+      // Si plus personne, supprimer la room
+      if (Object.keys(room.snakes).length === 0) {
+        clearInterval(room.interval);
+        delete rooms[room.id];
+        if (waitingRooms[room.config.mode] === room) waitingRooms[room.config.mode] = null;
+        console.log(`Room ${room.id} supprimée`);
+      } 
+      // Si un seul joueur reste, remettre la room en attente
+      else if (room.started && Object.keys(room.snakes).length === 1) {
+        clearInterval(room.interval);
+        room.started = false;
+        waitingRooms[room.config.mode] = room;
+        console.log(`Room ${room.id} remise en attente`);
       }
     });
   });

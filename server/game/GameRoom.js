@@ -2,16 +2,16 @@
 const Snake = require('./Snake');
 const Apple = require('./Apple');
 const { collide } = require('./collisions');
-const config = require('../config');
 
 class GameRoom {
-  constructor() {
-    this.snakes = {};      // { socketId: Snake }
+  constructor(config) {
+    this.config = config;
+    this.snakes = {};              // { socketId: Snake }
     this.apple = new Apple(config);
   }
 
   addPlayer(socketId) {
-    this.snakes[socketId] = new Snake(config);
+    this.snakes[socketId] = new Snake(this.config);
   }
 
   removePlayer(socketId) {
@@ -19,13 +19,16 @@ class GameRoom {
   }
 
   setInput(socketId, dir) {
-    if (this.snakes[socketId]) {
-      this.snakes[socketId].setDirection(config, dir);
-    }
+    const snake = this.snakes[socketId];
+    if (!snake) return;
+
+    snake.setDirection(dir);
   }
 
   update() {
-    // Déplacer les snakes et vérifier collisions avec la pomme
+    const { config } = this;
+
+    // Déplacement + pomme
     for (const id in this.snakes) {
       const snake = this.snakes[id];
       snake.move(config);
@@ -36,29 +39,30 @@ class GameRoom {
       }
     }
 
-    // Vérifier collisions entre snakes
     this.checkCollisions();
   }
 
   checkCollisions() {
+    const { config } = this;
     const ids = Object.keys(this.snakes);
 
     for (let i = 0; i < ids.length; i++) {
       const A = this.snakes[ids[i]];
       const headA = A.head();
 
-      // Collision avec son propre corps
-      for (let seg of A.body.slice(0, -1)) {
+      // 💥 collision avec son corps
+      for (const seg of A.body.slice(0, -1)) {
         if (collide(headA, seg, config.game.gridSize)) {
           A.reset(config);
         }
       }
 
-      // Collision avec les autres snakes
+      // 💥 collision avec les autres snakes
       for (let j = 0; j < ids.length; j++) {
         if (i === j) continue;
+
         const B = this.snakes[ids[j]];
-        for (let seg of B.body) {
+        for (const seg of B.body) {
           if (collide(headA, seg, config.game.gridSize)) {
             A.reset(config);
           }

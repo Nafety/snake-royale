@@ -5,7 +5,7 @@ class Snake {
     this.dir = { x: 1, y: 0 };
   }
 
-  setDirection(config, dir) {
+  setDirection(dir) {
     // Empêche l’inversion immédiate si tu veux (optionnel)
     if (this.body.length > 1) {
       const head = this.head();

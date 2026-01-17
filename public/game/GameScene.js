@@ -14,15 +14,15 @@ export class GameScene extends Phaser.Scene {
     this.playerSnakeCreated = false;
     this.apple = null;
     this.gameStarted = false;
+    this.statusText = null;
   }
 
   preload() {}
 
   create() {
-    // 👇 Charger la config une seule fois au démarrage
     this.pixelSize = clientConfig.game.pixelSize;
 
-    // 👇 Managers
+    // Managers
     this.inputManager = new InputManager(this);
     this.renderer = new SnakeRenderer(this, this.pixelSize);
 
@@ -30,32 +30,48 @@ export class GameScene extends Phaser.Scene {
     const height = window.innerHeight;
 
     // ================== MENU ==================
-    this.startBtn = this.add.text(width / 2, height / 2, 'Jouer', {
+    this.add.text(width / 2, height / 2 - 50, 'Choisissez un mode de jeu', {
+      fontSize: '28px',
+      fill: '#fff'
+    }).setOrigin(0.5);
+
+    // Bouton Classic
+    const classicBtn = this.add.text(width / 2, height / 2, 'Classic', {
       fontSize: '32px',
       fill: '#0f0'
-    })
-      .setOrigin(0.5)
+    }).setOrigin(0.5)
       .setInteractive()
-      .on('pointerdown', () => {
-        socketManager.emit('joinGame');
-        this.startBtn.destroy();
-        this.statusText = this.add.text(10, 10, 'En attente d’un adversaire...', { fill: '#fff' });
-      });
+      .on('pointerdown', () => this.startGame('classic', classicBtn, deathmatchBtn));
 
-    // ================= SOCKET EVENTS =================
+    // Bouton Deathmatch
+    const deathmatchBtn = this.add.text(width / 2, height / 2 + 60, 'Deathmatch', {
+      fontSize: '32px',
+      fill: '#f00'
+    }).setOrigin(0.5)
+      .setInteractive()
+      .on('pointerdown', () => this.startGame('deathmatch', classicBtn, deathmatchBtn));
+  }
 
-    // 🟢 Début partie
-    socketManager.on('start', ({ playerId }) => {
+  startGame(mode, btn1, btn2) {
+    // Émettre l'événement joinGame avec le mode choisi
+    socketManager.emit('joinGame', mode);
+
+    // Détruire les boutons
+    btn1.destroy();
+    btn2.destroy();
+
+    // Afficher message en attente
+    this.statusText = this.add.text(10, 10, 'En attente d’un adversaire...', { fill: '#fff' });
+
+    // Événements Socket
+    socketManager.on('start', ({ playerId, config }) => {
       this.playerId = playerId;
       this.gameStarted = true;
-
-      if (this.statusText) this.statusText.setText('Partie démarrée !');
-      else this.add.text(10, 10, 'Partie démarrée !', { fill: '#0f0' });
+      if (this.statusText) this.statusText.setText(`Partie démarrée (${mode}) !`);
     });
 
-    // 🔄 Mise à jour état
     socketManager.on('state', state => {
-      if (!this.gameStarted) return; // ignore avant start
+      if (!this.gameStarted) return;
 
       this.snakesData = state.snakes;
 
@@ -71,7 +87,6 @@ export class GameScene extends Phaser.Scene {
       for (const id in state.snakes) {
         const snake = state.snakes[id];
         if (id === this.playerId) {
-          // joueur actuel
           if (!this.playerSnakeCreated) {
             const head = snake.body[snake.body.length - 1];
             this.renderer.createPlayerSnake(head.x, head.y);
@@ -79,7 +94,6 @@ export class GameScene extends Phaser.Scene {
           }
           this.renderer.updatePlayerBody(snake.body);
         } else {
-          // adversaire
           this.renderer.updateOtherSnakes({ [id]: snake }, this.playerId);
         }
       }
@@ -89,7 +103,7 @@ export class GameScene extends Phaser.Scene {
   update() {
     if (!this.playerSnakeCreated || !this.gameStarted) return;
 
-    // 📌 Gestion entrée clavier
+    // Gestion entrée clavier
     if (this.inputManager.update()) {
       const dir = this.inputManager.getDirection();
       socketManager.emit('input', dir);
