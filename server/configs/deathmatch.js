@@ -6,13 +6,16 @@ module.exports = {
 
   game: {
     map: {
-      width: 10,      // 40 cellules en grille
-      height: 10      // 30 cellules en grille
+      width: 20,      // 40 cellules en grille
+      height: 20      // 30 cellules en grille
     },
 
     snake: {
-      startLength: 2,
-      startPos: { x: 10, y: 10 }  // coordonnées GRILLE au lieu de pixels
+      startLength: 3,
+      startPos: { x: 10, y: 10 }  // coordonnées GRILLE (pas pixels)
     }
-  }
+  },
+
+  maxPlayers: 3,    // nombre de joueurs requis pour démarrer
+  mode: 'deathmatch'   // identifiant du mode de jeu
 };

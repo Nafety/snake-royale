@@ -12,7 +12,10 @@ module.exports = {
 
     snake: {
       startLength: 3,
-      startPos: { x: 10, y: 10 }  // coordonnées GRILLE au lieu de pixels
+      startPos: { x: 10, y: 10 }  // coordonnées GRILLE (pas pixels)
     }
-  }
+  },
+
+  maxPlayers: 2,    // nombre de joueurs requis pour démarrer
+  mode: 'classic'   // identifiant du mode de jeu
 };
