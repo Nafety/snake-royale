@@ -50,12 +50,12 @@ class GameRoom {
       const A = this.snakes[ids[i]];
       const headA = A.head();
 
-      // 💥 collision avec son corps
-      for (const seg of A.body.slice(0, -1)) {
-        if (collide(headA, seg, config.game.gridSize)) {
-          A.reset(config);
-        }
-      }
+      // // 💥 collision avec son corps
+      // for (const seg of A.body.slice(0, -1)) {
+      //   if (collide(headA, seg, config.game.gridSize)) {
+      //     A.reset(config);
+      //   }
+      // }
 
       // 💥 collision avec les autres snakes
       for (let j = 0; j < ids.length; j++) {
