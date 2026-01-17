@@ -1,10 +1,6 @@
-const config = require('../config');
-
 function collide(a, b) {
-  return (
-    Math.abs(a.x - b.x) < config.game.gridSize &&
-    Math.abs(a.y - b.y) < config.game.gridSize
-  );
+  // Comparaison simple en grille : deux cellules sont identiques si x et y sont égaux
+  return a.x === b.x && a.y === b.y;
 }
 
 module.exports = { collide };

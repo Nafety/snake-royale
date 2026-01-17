@@ -1,6 +1,7 @@
 import { InputManager } from './InputManager.js';
 import { SnakeRenderer } from './SnakeRenderer.js';
 import { socketManager } from '../socket/SocketManager.js';
+import { clientConfig } from '../config.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -18,9 +19,12 @@ export class GameScene extends Phaser.Scene {
   preload() {}
 
   create() {
+    // 👇 Charger la config une seule fois au démarrage
+    this.pixelSize = clientConfig.game.pixelSize;
+
     // 👇 Managers
     this.inputManager = new InputManager(this);
-    this.renderer = new SnakeRenderer(this);
+    this.renderer = new SnakeRenderer(this, this.pixelSize);
 
     const width = window.innerWidth;
     const height = window.innerHeight;

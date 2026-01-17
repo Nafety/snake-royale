@@ -1,27 +1,41 @@
 export class SnakeRenderer {
-  constructor(scene) {
+  constructor(scene, pixelSize) {
     this.scene = scene;
     this.snakes = {};       // segments des adversaires
     this.playerSnake = null; // tête du joueur
     this.playerBody = [];   // corps du joueur
     this.apple = null;      // pomme
+    this.PIXEL_SIZE = pixelSize;   // Chaque cellule grille en pixels (depuis config.js)
+  }
+
+  // Convertit coordonnées GRILLE en PIXELS
+  gridToPixels(gridPos) {
+    return {
+      x: gridPos.x * this.PIXEL_SIZE + this.PIXEL_SIZE / 2,
+      y: gridPos.y * this.PIXEL_SIZE + this.PIXEL_SIZE / 2
+    };
   }
 
   // Crée la tête du joueur
   createPlayerSnake(x, y) {
-    this.playerSnake = this.scene.add.rectangle(x, y, 20, 20, 0x00ff00);
+    const pixelPos = this.gridToPixels({ x, y });
+    this.playerSnake = this.scene.add.rectangle(pixelPos.x, pixelPos.y, this.PIXEL_SIZE, this.PIXEL_SIZE, 0x00ff00);
     return this.playerSnake;
   }
 
   // Crée la pomme
   createApple(x, y) {
-    this.apple = this.scene.add.rectangle(x, y, 20, 20, 0xff0000);
+    const pixelPos = this.gridToPixels({ x, y });
+    this.apple = this.scene.add.rectangle(pixelPos.x, pixelPos.y, this.PIXEL_SIZE, this.PIXEL_SIZE, 0xff0000);
     return this.apple;
   }
 
   // Met à jour la pomme
   updateApple(x, y) {
-    if (this.apple) this.apple.setPosition(x, y);
+    if (this.apple) {
+      const pixelPos = this.gridToPixels({ x, y });
+      this.apple.setPosition(pixelPos.x, pixelPos.y);
+    }
   }
 
   // Met à jour le corps du joueur
@@ -30,21 +44,22 @@ export class SnakeRenderer {
 
     // créer segments si nécessaire
     while (this.playerBody.length < body.length - 1) {
-      const segment = this.scene.add.rectangle(0, 0, 16, 16, 0x00cc00);
+      const segment = this.scene.add.rectangle(0, 0, this.PIXEL_SIZE - 4, this.PIXEL_SIZE - 4, 0x00cc00);
       this.playerBody.push(segment);
     }
     while (this.playerBody.length > body.length - 1) {
       this.playerBody.pop().destroy();
     }
 
-    // positionner segments
+    // positionner segments en pixels
     for (let i = 0; i < body.length - 1; i++) {
-      this.playerBody[i].setPosition(body[i].x, body[i].y);
+      const pixelPos = this.gridToPixels(body[i]);
+      this.playerBody[i].setPosition(pixelPos.x, pixelPos.y);
     }
 
     // tête
-    const head = body[body.length - 1];
-    this.playerSnake.setPosition(head.x, head.y);
+    const headPixelPos = this.gridToPixels(body[body.length - 1]);
+    this.playerSnake.setPosition(headPixelPos.x, headPixelPos.y);
   }
 
   // Met à jour les snakes adverses
@@ -57,16 +72,17 @@ export class SnakeRenderer {
 
       // créer segments si nécessaire
       while (this.snakes[id].length < body.length) {
-        const segment = this.scene.add.rectangle(0, 0, 20, 20, 0x0000ff);
+        const segment = this.scene.add.rectangle(0, 0, this.PIXEL_SIZE, this.PIXEL_SIZE, 0x0000ff);
         this.snakes[id].push(segment);
       }
       while (this.snakes[id].length > body.length) {
         this.snakes[id].pop().destroy();
       }
 
-      // positionner segments
+      // positionner segments en pixels
       for (let i = 0; i < body.length; i++) {
-        this.snakes[id][i].setPosition(body[i].x, body[i].y);
+        const pixelPos = this.gridToPixels(body[i]);
+        this.snakes[id][i].setPosition(pixelPos.x, pixelPos.y);
       }
     }
   }

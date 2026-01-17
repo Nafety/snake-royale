@@ -10,8 +10,8 @@ class Snake {
     if (this.body.length > 1) {
       const head = this.head();
       const neck = this.body[this.body.length - 2];
-      if (dir.x === (head.x - neck.x) / config.game.gridSize &&
-          dir.y === (head.y - neck.y) / config.game.gridSize) {
+      if (dir.x === head.x - neck.x &&
+          dir.y === head.y - neck.y) {
         return; // ignore inversion
       }
     }
@@ -20,18 +20,18 @@ class Snake {
 
   move(config) {
     const head = this.head();
-    let nextX = head.x + this.dir.x * config.game.gridSize;
-    let nextY = head.y + this.dir.y * config.game.gridSize;
+    let nextX = head.x + this.dir.x;    // +1 cellule grille au lieu de +pixelSize
+    let nextY = head.y + this.dir.y;    // +1 cellule grille au lieu de +pixelSize
 
     // === Wrapping ===
-    const maxX = config.game.map.width * config.game.gridSize;
-    const maxY = config.game.map.height * config.game.gridSize;
+    const maxX = config.game.map.width;
+    const maxY = config.game.map.height;
 
     if (nextX >= maxX) nextX = 0;
-    if (nextX < 0) nextX = maxX - config.game.gridSize;
+    if (nextX < 0) nextX = maxX - 1;
 
     if (nextY >= maxY) nextY = 0;
-    if (nextY < 0) nextY = maxY - config.game.gridSize;
+    if (nextY < 0) nextY = maxY - 1;
 
     const next = { x: nextX, y: nextY };
     this.body.push(next);

@@ -9,9 +9,10 @@ class Apple {
   }
 
   randomPos(config) {
+    // Positions en coordonnées GRILLE au lieu de pixels
     return {
-      x: Math.floor(Math.random() * config.game.map.width) * config.game.gridSize,
-      y: Math.floor(Math.random() * config.game.map.height) * config.game.gridSize
+      x: Math.floor(Math.random() * config.game.map.width),
+      y: Math.floor(Math.random() * config.game.map.height)
     };
   }
 }
