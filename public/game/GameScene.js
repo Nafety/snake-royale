@@ -91,6 +91,13 @@ export class GameScene extends Phaser.Scene {
         }
       }
     });
+
+    // 🔄 Reset de la direction quand le serpent respawn
+    socketManager.on('playerReset', () => {
+      if (this.inputManager) {
+        this.inputManager.lastDirection = { x: 0, y: 0 }; // Reset à droite (direction initiale)
+      }
+    });
   }
 
   update() {

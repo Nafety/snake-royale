@@ -6,14 +6,9 @@ class Snake {
   }
 
   setDirection(dir) {
-    // Empêche l’inversion immédiate si tu veux (optionnel)
-    if (this.body.length > 1) {
-      const head = this.head();
-      const neck = this.body[this.body.length - 2];
-      if (dir.x === head.x - neck.x &&
-          dir.y === head.y - neck.y) {
-        return; // ignore inversion
-      }
+    // Empêche l'inversion immédiate (180 degrés)
+    if (this.dir.x + dir.x === 0 && this.dir.y + dir.y === 0) {
+      return; // ignore inversion
     }
     this.dir = dir;
   }
