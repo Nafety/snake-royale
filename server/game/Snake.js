@@ -6,6 +6,7 @@ class Snake {
     this.body = [{ ...config.game.snake.startPos }];
     this.length = config.game.snake.startLength;
     this.dir = { x: 0, y: 0 };
+    this.nextDir = { x: 0, y: 0 };
 
     // Gestion des effets / cooldowns
     this.effects = {};        // ex: { dashUntil: timestamp }
@@ -15,15 +16,10 @@ class Snake {
 
   // ====== Direction ======
   setDirection(dir) {
-    // Empêche inversion si config le dit
-    if (
-      this.config.game.snake.inversionAllowed === false &&
-      this.dir.x + dir.x === 0 &&
-      this.dir.y + dir.y === 0
-    ) return;
-
-    this.dir = dir;
+    // Stocke seulement l’intention
+    this.nextDir = dir;
   }
+
 
   // ====== Compétences ======
   canUseSkill(name, costLength, cooldownMs) {
@@ -86,7 +82,15 @@ class Snake {
   // ====== Déplacement ======
   move(config) {
     if (this.isFrozen()) return;
-
+    if (
+      !config.game.snake.inversionAllowed &&
+      this.dir.x + this.nextDir.x === 0 &&
+      this.dir.y + this.nextDir.y === 0
+    ) {
+      // ignore le virage
+    } else {
+      this.dir = this.nextDir;
+    }
     const head = this.head();
     let nextX = head.x + this.dir.x;
     let nextY = head.y + this.dir.y;
