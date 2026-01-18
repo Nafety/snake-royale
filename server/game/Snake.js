@@ -5,10 +5,12 @@ class Snake {
     this.dir = { x: 0, y: 0 };
   }
 
-  setDirection(dir) {
+  setDirection(dir, config) {
     // Empêche l'inversion immédiate (180 degrés)
-    if (this.dir.x + dir.x === 0 && this.dir.y + dir.y === 0) {
-      return; // ignore inversion
+    if (config.game.snake.inversionAllowed === false) {
+      if (this.dir.x + dir.x === 0 && this.dir.y + dir.y === 0) {
+        return; // ignore inversion
+      }
     }
     this.dir = dir;
   }
@@ -39,9 +41,20 @@ class Snake {
   }
 
   reset(config) {
-    this.body = [ { ...config.game.snake.startPos } ];
-    this.length = config.game.snake.startLength;  
-    this.dir = { x: 0, y: 0 };
+    if (config.game.snake.respawnAfterDeath === false) {
+      if(config.game.snake.dammageOnCollision) {
+        this.length -= config.game.snake.dammageCollision;
+        if(this.length < 1) this.length = 1;
+      }
+    }
+    else {
+      this.length = config.game.snake.respawnLength;
+      this.body = [];
+      for (let i = 0; i < this.length; i++) {
+        this.body.push({ ...config.game.snake.startPos });
+      }
+      this.dir = { x: 0, y: 0 };
+    }
   }
 
   head() {

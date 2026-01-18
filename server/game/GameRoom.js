@@ -23,7 +23,7 @@ class GameRoom {
     const snake = this.snakes[socketId];
     if (!snake) return;
 
-    snake.setDirection(dir);
+    snake.setDirection(dir, this.config);
   }
 
   update() {
@@ -51,12 +51,15 @@ class GameRoom {
       const A = this.snakes[ids[i]];
       const headA = A.head();
 
-      // // 💥 collision avec son corps
-      // for (const seg of A.body.slice(0, -1)) {
-      //   if (collide(headA, seg, config.game.gridSize)) {
-      //     A.reset(config);
-      //   }
-      // }
+      // 💥 collision avec son corps
+      if (config.game.snake.selfCollision) {
+        for (const seg of A.body.slice(0, -1)) {
+          if (collide(headA, seg, config.game.gridSize)) {
+            A.reset(config);
+            this.resetThisFrame.add(ids[i]);
+          }
+        }
+      }
 
       // 💥 collision avec les autres snakes
       for (let j = 0; j < ids.length; j++) {

@@ -15,6 +15,12 @@ module.exports = {
 
     snake: {
       startLength: 3,
+      respawnLength: 2,
+      respawnAfterDeath: true,
+      dammageOnCollision: false,
+      dammageCollision: 1,
+      inversionAllowed: false,
+      selfCollision: true,
       startPos: { x: 10, y: 10 }  // coordonnées GRILLE (pas pixels)
     }
   },
