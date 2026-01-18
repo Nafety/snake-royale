@@ -8,6 +8,7 @@ class GameRoom {
     this.config = config;
     this.snakes = {};              // { socketId: Snake }
     this.apple = new Apple(config);
+    this.resetThisFrame = new Set(); // Track qui a reset ce frame
   }
 
   addPlayer(socketId) {
@@ -65,6 +66,7 @@ class GameRoom {
         for (const seg of B.body) {
           if (collide(headA, seg, config.game.gridSize)) {
             A.reset(config);
+            this.resetThisFrame.add(ids[i]);
           }
         }
       }

@@ -63,6 +63,12 @@ module.exports = function(io, sessionMiddleware) {
           // Lancer game loop
           room.interval = setInterval(() => {
             room.update();
+            
+            // Envoyer les resets aux clients concernés
+            room.resetThisFrame.forEach(socketId => {
+              io.to(socketId).emit('playerReset');
+            });
+            
             io.to(room.id).emit('state', room.getState());
           }, room.config.server.tickRate);
 
