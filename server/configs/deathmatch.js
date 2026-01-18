@@ -5,9 +5,12 @@ module.exports = {
   },
 
   game: {
+    pixelSize: 50,
     map: {
-      width: 20,      // 40 cellules en grille
-      height: 20      // 30 cellules en grille
+      width: 10,      // 40 cellules en grille
+      height: 10,
+      paddingX: 40,    // total gauche + droite
+      paddingY: 80   // total haut + bas
     },
 
     snake: {

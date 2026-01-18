@@ -20,6 +20,9 @@ const sessionMiddleware = session({
   }
 });
 
+const configurationRouter = require('./routes/configuration');
+app.use("/api/config", configurationRouter);
+
 app.use(sessionMiddleware);
 
 // 👉 partager la session avec socket.io
@@ -34,6 +37,6 @@ app.use(express.static('public'));
 setupSockets(io, sessionMiddleware);
 
 // ================= SERVER =================
-server.listen(config.server.port, () => {
-  console.log(`✅ Server running on http://localhost:${config.server.port}`);
+server.listen(config.server.port, '0.0.0.0', () => {
+  console.log(`✅ Server running on http://0.0.0.0:${config.server.port}`);
 });

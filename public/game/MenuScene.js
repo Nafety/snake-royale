@@ -11,6 +11,21 @@ export class MenuScene extends Phaser.Scene {
       fill: '#fff'
     }).setOrigin(0.5);
 
+    // Fonction générique pour lancer une partie
+    const startGame = async (mode) => {
+      try {
+        const res = await fetch(`/api/config/${mode}`);
+        const data = await res.json();
+        if (!data.ok) return alert("Mode de jeu invalide");
+
+        // Lancer la scène avec la config déjà chargée
+        this.scene.start('GameScene', { mode, config: data.frontConfig });
+      } catch (err) {
+        console.error("Erreur en chargeant la config :", err);
+        alert("Impossible de charger la config du jeu");
+      }
+    };
+
     // Bouton Classic
     const classicBtn = this.add.text(width / 2, height / 2, 'Classic', {
       fontSize: '32px',
@@ -18,9 +33,7 @@ export class MenuScene extends Phaser.Scene {
     })
       .setOrigin(0.5)
       .setInteractive()
-      .on('pointerdown', () => {
-        this.scene.start('GameScene', { mode: 'classic' });
-      });
+      .on('pointerdown', () => startGame('classic'));
 
     // Bouton Deathmatch
     const deathmatchBtn = this.add.text(width / 2, height / 2 + 60, 'Deathmatch', {
@@ -29,8 +42,6 @@ export class MenuScene extends Phaser.Scene {
     })
       .setOrigin(0.5)
       .setInteractive()
-      .on('pointerdown', () => {
-        this.scene.start('GameScene', { mode: 'deathmatch' });
-      });
+      .on('pointerdown', () => startGame('deathmatch'));
   }
 }
