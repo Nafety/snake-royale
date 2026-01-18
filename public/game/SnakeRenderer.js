@@ -5,6 +5,7 @@ export class SnakeRenderer {
     this.playerSnake = null;
     this.playerBody = [];
     this.apple = null;
+    this.walls = []; // ← murs actifs
 
     this.PIXEL_SIZE = pixelSize;
     this.gridWidth = gridWidth;
@@ -79,13 +80,36 @@ export class SnakeRenderer {
     }
   }
 
+  updateWalls(walls) {
+    if (!walls) walls = [];
+
+    // Supprime les murs en trop
+    while (this.walls.length > walls.length) {
+      this.walls.pop().destroy();
+    }
+
+    // Ajoute les murs manquants
+    while (this.walls.length < walls.length) {
+      const rect = this.scene.add.rectangle(0, 0, this.PIXEL_SIZE, this.PIXEL_SIZE, 0x888888);
+      this.walls.push(rect);
+    }
+
+    // Met à jour les positions
+    for (let i = 0; i < walls.length; i++) {
+      const pos = this.gridToPixels(walls[i]);
+      this.walls[i].setPosition(pos.x, pos.y);
+    }
+  }
+
+
   updatePixelSize(newPixelSize, offsetX = null, offsetY = null) {
     this.PIXEL_SIZE = newPixelSize;
     if (offsetX !== null) this.offsetX = offsetX;
     if (offsetY !== null) this.offsetY = offsetY;
   }
 
-  redraw(snakesData, apple) {
+  redraw(snakesData, apple, walls) {
+    // Player snake
     if (this.playerSnake && this.playerBody.length && snakesData[this.scene.playerId]) {
       const playerBody = snakesData[this.scene.playerId].body;
       for (let i = 0; i < this.playerBody.length; i++) {
@@ -96,6 +120,7 @@ export class SnakeRenderer {
       this.playerSnake.setPosition(headPos.x, headPos.y);
     }
 
+    // Other snakes
     for (const id in snakesData) {
       if (id === this.scene.playerId) continue;
       const body = snakesData[id].body;
@@ -106,6 +131,10 @@ export class SnakeRenderer {
       }
     }
 
+    // Apple
     if (apple) this.updateApple(apple.x, apple.y);
+
+    // Walls
+    if (walls) this.updateWalls(walls);
   }
 }

@@ -7,12 +7,30 @@ module.exports = {
   game: {
     pixelSize: 50,
     map: {
-      width: 10,      // 40 cellules en grille
-      height: 10,
-      paddingX: 40,    // total gauche + droite
-      paddingY: 80   // total haut + bas
+      width: 60,      // 40 cellules en grille
+      height: 30,
+      paddingX: 50,    // total gauche + droite
+      paddingY: 50   // total haut + bas
     },
 
+    skills: {
+      dash: {
+        cost: 1,
+        numberOfCells: 5,
+        cooldownMs: 5000
+      },
+      freeze: {
+        cost: 2,
+        durationMs: 3000,
+        cooldownMs: 8000
+      },
+      wall: {
+        cost: 3,
+        numberOfCells: 3,
+        durationMs: 5000,
+        cooldownMs: 10000
+      },
+    },
     snake: {
       startLength: 3,
       respawnLength: 2,
@@ -25,6 +43,6 @@ module.exports = {
     }
   },
 
-  maxPlayers: 3,    // nombre de joueurs requis pour démarrer
+  maxPlayers: 2,    // nombre de joueurs requis pour démarrer
   mode: 'deathmatch'   // identifiant du mode de jeu
 };

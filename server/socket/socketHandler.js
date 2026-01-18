@@ -1,4 +1,3 @@
-// server/socket/socketHandler.js
 const GameRoom = require('../game/GameRoom');
 const path = require('path');
 
@@ -30,7 +29,6 @@ module.exports = function(io, sessionMiddleware) {
         let room = waitingRooms[mode].find(r => !r.started && Object.keys(r.snakes).length < gameConfig.maxPlayers);
 
         if (!room) {
-          // Créer une nouvelle room si aucune dispo
           const roomId = `room-${Date.now()}`;
           room = new GameRoom(gameConfig);
           room.config = gameConfig;
@@ -43,16 +41,13 @@ module.exports = function(io, sessionMiddleware) {
           console.log(`Nouvelle room ${roomId} créée pour mode ${mode}`);
         }
 
-        // Rejoindre la room trouvée
         room.addPlayer(socket.id);
         socket.join(room.id);
         console.log(`Player ${socket.id} rejoint room ${room.id}`);
 
-        // Si la room est maintenant pleine, démarrer
         if (Object.keys(room.snakes).length >= gameConfig.maxPlayers) {
           room.started = true;
 
-          // Prévenir tous les joueurs
           Object.keys(room.snakes).forEach(id => {
             io.to(id).emit('start', {
               playerId: id,
@@ -60,22 +55,18 @@ module.exports = function(io, sessionMiddleware) {
             });
           });
 
-          // Lancer game loop
           room.interval = setInterval(() => {
             room.update();
-            
-            // Envoyer les resets aux clients concernés
+
             room.resetThisFrame.forEach(socketId => {
               io.to(socketId).emit('playerReset');
             });
-            
+
             io.to(room.id).emit('state', room.getState());
           }, room.config.server.tickRate);
 
-          // Retirer la room de la liste d'attente
           waitingRooms[mode] = waitingRooms[mode].filter(r => r !== room);
         } else {
-          // Room pas encore pleine → joueur en attente
           socket.emit('waiting', { roomId: room.id });
         }
 
@@ -83,12 +74,21 @@ module.exports = function(io, sessionMiddleware) {
         console.error(`Erreur loading config pour le mode ${mode}:`, err);
         socket.emit('error', { message: 'Mode de jeu invalide' });
       }
-    });+
+    });
 
     // INPUT
     socket.on('input', dir => {
       const room = Object.values(rooms).find(r => r.snakes[socket.id]);
       if (room) room.setInput(socket.id, dir);
+    });
+
+    // === NOUVEL ÉVÉNEMENT COMPÉTENCE ===
+    socket.on('useSkill', ({ skill }) => {
+      const room = Object.values(rooms).find(r => r.snakes[socket.id]);
+      if (!room) return;
+
+      console.log(`Player ${socket.id} uses skill: ${skill}`);
+      room.useSkill(socket.id, skill);
     });
 
     // DISCONNECT

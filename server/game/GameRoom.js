@@ -9,6 +9,7 @@ class GameRoom {
     this.snakes = {};              // { socketId: Snake }
     this.apple = new Apple(config);
     this.resetThisFrame = new Set(); // Track qui a reset ce frame
+    this.walls = [];               // murs actifs
   }
 
   addPlayer(socketId) {
@@ -22,26 +23,40 @@ class GameRoom {
   setInput(socketId, dir) {
     const snake = this.snakes[socketId];
     if (!snake) return;
-
     snake.setDirection(dir, this.config);
   }
 
   update() {
     const { config } = this;
+    const now = Date.now();
 
-    // Déplacement + pomme
+    // 🔹 Supprimer les murs expirés
+    if (this.walls) {
+      this.walls = this.walls.filter(w => !w.expiresAt || w.expiresAt > now);
+    } else {
+      this.walls = [];
+    }
+
+    // 🔹 Déplacement des serpents + ramassage de pomme
     for (const id in this.snakes) {
       const snake = this.snakes[id];
-      snake.move(config);
 
+      // Vérifier si le serpent est gelé
+      if (!snake.isFrozen || !snake.isFrozen()) {
+        snake.move(config);
+      }
+
+      // Ramasser la pomme
       if (collide(snake.head(), this.apple.pos, config.game.gridSize)) {
         snake.grow();
         this.apple.respawn(config);
       }
     }
 
+    // 🔹 Vérifier collisions (corps, autres serpents, murs)
     this.checkCollisions();
   }
+
 
   checkCollisions() {
     const { config } = this;
@@ -73,13 +88,50 @@ class GameRoom {
           }
         }
       }
+
+      // 💥 collision avec les murs
+      for (const wall of this.walls) {
+        if (collide(headA, wall, config.game.gridSize)) {
+          A.reset(config);
+          this.resetThisFrame.add(ids[i]);
+        }
+      }
+    }
+  }
+
+  // ================================
+  // GESTION DES COMPÉTENCES
+  // ================================
+  useSkill(playerId, skill) {
+    const snake = this.snakes[playerId];
+    if (!snake) return;
+
+    switch (skill) {
+      case 'dash':
+        snake.tryDash(this.config);
+        break;
+      case 'freeze':
+        snake.applyFreeze(this.config);
+        break;
+      case 'wall':
+        const newWalls = snake.tryWall(this.config);
+        if (newWalls) {
+          this.walls.push(...newWalls);
+        }
+        break;
     }
   }
 
   getState() {
+    const snakesState = {};
+    for (const id in this.snakes) {
+      snakesState[id] = this.snakes[id].getPublicState();
+    }
+
     return {
-      snakes: this.snakes,
-      apple: this.apple.pos
+      snakes: snakesState,
+      apple: this.apple.pos,
+      walls: this.walls
     };
   }
 }

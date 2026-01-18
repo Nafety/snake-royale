@@ -15,7 +15,7 @@ export class GameScene extends Phaser.Scene {
     this.gameStarted = false;
     this.statusText = null;
     this.mode = null;
-
+    this.walls = [];
     this.gridWidth = null;
     this.gridHeight = null;
     this.pixelSize = null;
@@ -35,12 +35,10 @@ export class GameScene extends Phaser.Scene {
     this.paddingX = this.config.paddingX || 0;
     this.paddingY = this.config.paddingY || 0;
 
-    // calcul initial pixelSize
     this.calculatePixelSize(window.innerWidth, window.innerHeight);
   }
 
   create() {
-    // calculer offset initial pour centrer la grille
     const offsetX = (window.innerWidth - this.gridWidth * this.pixelSize) / 2;
     const offsetY = (window.innerHeight - this.gridHeight * this.pixelSize) / 2;
 
@@ -55,7 +53,6 @@ export class GameScene extends Phaser.Scene {
       { fill: '#fff', fontSize: '20px' }
     );
 
-    // resize automatique
     this.scale.on('resize', (gameSize) => {
       this.onResize(gameSize.width, gameSize.height);
     });
@@ -69,7 +66,7 @@ export class GameScene extends Phaser.Scene {
     socketManager.on('state', state => {
       if (!this.gameStarted) return;
       this.snakesData = state.snakes;
-
+      this.walls = state.walls;
       if (!this.apple) {
         this.renderer.createApple(state.apple.x, state.apple.y);
         this.apple = this.renderer.apple;
@@ -90,12 +87,12 @@ export class GameScene extends Phaser.Scene {
           this.renderer.updateOtherSnakes({ [id]: snake }, this.playerId);
         }
       }
+      this.renderer.updateWalls(this.walls);
     });
 
-    // 🔄 Reset de la direction quand le serpent respawn
     socketManager.on('playerReset', () => {
       if (this.inputManager) {
-        this.inputManager.lastDirection = { x: 0, y: 0 }; // Reset à droite (direction initiale)
+        this.inputManager.lastDirection = { x: 0, y: 0 };
       }
     });
   }
@@ -103,9 +100,19 @@ export class GameScene extends Phaser.Scene {
   update() {
     if (!this.playerSnakeCreated || !this.gameStarted) return;
 
+    // ==== Déplacement ====
     if (this.inputManager.update()) {
       const dir = this.inputManager.getDirection();
       socketManager.emit('input', dir);
+    }
+
+    // ==== Compétences AZER ====
+    while (this.inputManager.hasSkillInput()) {
+      const skill = this.inputManager.consumeSkillInput();
+      if (skill) {
+        console.log(`Envoi skill au serveur: ${skill}`);
+        socketManager.emit('useSkill', { skill });
+      }
     }
   }
 
@@ -123,7 +130,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.renderer) {
       this.renderer.updatePixelSize(this.pixelSize, offsetX, offsetY);
-      this.renderer.redraw(this.snakesData, this.apple);
+      this.renderer.redraw(this.snakesData, this.apple, this.walls);
     }
   }
 }
