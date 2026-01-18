@@ -37,6 +37,10 @@ app.use(express.static('public'));
 setupSockets(io, sessionMiddleware);
 
 // ================= SERVER =================
-server.listen(config.server.port, '0.0.0.0', () => {
-  console.log(`✅ Server running on http://0.0.0.0:${config.server.port}`);
+server.listen(config.server.port, () => {
+  console.log(`✅ Server running on http://localhost:${config.server.port}`);
 });
+
+//server.listen(config.server.port, '0.0.0.0', () => {
+//  console.log(`✅ Server running on http://0.0.0.0:${config.server.port}`);
+//});
