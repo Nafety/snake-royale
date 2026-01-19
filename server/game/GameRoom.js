@@ -2,24 +2,42 @@
 const Snake = require('./Snake');
 const Apple = require('./Apple');
 const { collide } = require('./collisions');
-const { SKILLS_DB } = require('../skills');
 
 class GameRoom {
-  constructor(config) {
+  constructor(config, skillsDB) {
     this.config = config;
-    this.skills = SKILLS_DB;
-    this.snakes = {};              // { socketId: Snake }
+
+    // DB complète des skills (envoyée au client)
+    this.skills = skillsDB;
+
+    // { socketId: Snake }
+    this.snakes = {};
+
     this.apple = new Apple(config);
-    this.resetThisFrame = new Set(); // Track qui a reset ce frame
-    this.walls = [];               // murs actifs
+    this.resetThisFrame = new Set();
+    this.walls = [];
+
+    // 🔹 Layout sélectionné par joueur
+    // { socketId: ['dash', 'freeze'] }
+    this.playerLayouts = {};
   }
 
-  addPlayer(socketId) {
-    this.snakes[socketId] = new Snake(this.config, this.skills);
+  // ================================
+  // JOUEURS
+  // ================================
+  addPlayer(socketId, loadout = []) {
+    console.log(`Adding player ${socketId} with loadout:`, loadout);
+    // Enregistrer le loadout du joueur
+    this.setLayout(socketId, loadout);
+    console.log(`Player ${socketId} layout set to:`, this.playerLayouts[socketId]);
+    // Créer le snake avec ses compétences
+    const snake = new Snake(this.config, this.skills, this.playerLayouts[socketId]);
+    this.snakes[socketId] = snake;
   }
 
   removePlayer(socketId) {
     delete this.snakes[socketId];
+    delete this.playerLayouts[socketId];
   }
 
   setInput(socketId, dir) {
@@ -28,42 +46,71 @@ class GameRoom {
     snake.setDirection(dir, this.config);
   }
 
+  // ================================
+  // LAYOUT / SKILLS
+  // ================================
+  /**
+   * Renvoie la liste complète des compétences pour le client
+   */
+  getLayout(playerId) {
+    return {
+      choices: Object.entries(this.skills),           // ['dash','freeze','wall']
+      selected: this.playerLayouts[playerId] || [] // loadout actuel du joueur
+    };
+  }
+
+  /**
+   * Enregistre le loadout sélectionné par le joueur
+   */
+  setLayout(playerId, selectedSkills) {
+    const validSkills = Object.keys(this.skills);
+
+    const filtered = selectedSkills
+      .filter(s => validSkills.includes(s))
+      .slice(0, this.config.game.maxSkills); // max skills
+
+    this.playerLayouts[playerId] = filtered;
+  }
+
+  /**
+   * Loadout final utilisé côté jeu
+   */
+  getPlayerLoadout(playerId) {
+    return this.playerLayouts[playerId] || [];
+  }
+
+  // ================================
+  // GAME LOOP
+  // ================================
   update() {
     const { config } = this;
     const now = Date.now();
 
-    // 🔹 Supprimer les murs expirés
-    if (this.walls) {
-      this.walls = this.walls.filter(w => !w.expiresAt || w.expiresAt > now);
-    } else {
-      this.walls = [];
-    }
+    // 🔹 Supprimer murs expirés
+    this.walls = this.walls.filter(
+      w => !w.expiresAt || w.expiresAt > now
+    );
 
-    // 🔹 Déplacement des serpents + ramassage de pomme
+    // 🔹 Déplacement + pomme
     for (const id in this.snakes) {
       const snake = this.snakes[id];
 
-      // Vérifier si le serpent est gelé
       if (!snake.isFrozen || !snake.isFrozen()) {
         snake.move(config);
       }
 
-      // Ramasser la pomme
       if (collide(snake.head(), this.apple.pos, config.game.gridSize)) {
         snake.grow();
         this.apple.respawn(config);
       }
     }
 
-    // 🔹 Vérifier collisions (corps, autres serpents, murs)
     this.checkCollisions();
   }
 
-  getPlayerLoadout(playerId) {
-    // Pour l'instant, loadout fixe
-    return ['dash', 'freeze'];
-  }
-
+  // ================================
+  // COLLISIONS
+  // ================================
   checkCollisions() {
     const { config } = this;
     const ids = Object.keys(this.snakes);
@@ -82,7 +129,7 @@ class GameRoom {
         }
       }
 
-      // 💥 collision avec les autres snakes
+      // 💥 collision avec les autres serpents
       for (let j = 0; j < ids.length; j++) {
         if (i === j) continue;
 
@@ -95,7 +142,7 @@ class GameRoom {
         }
       }
 
-      // 💥 collision avec les murs
+      // 💥 collision avec murs
       for (const wall of this.walls) {
         if (collide(headA, wall, config.game.gridSize)) {
           A.reset(config);
@@ -106,29 +153,22 @@ class GameRoom {
   }
 
   // ================================
-  // GESTION DES COMPÉTENCES
+  // UTILISATION DES COMPÉTENCES
   // ================================
   useSkill(playerId, skill) {
     if (!this.config.game.useSkills) return;
+
     const snake = this.snakes[playerId];
     if (!snake) return;
 
-    switch (skill) {
-      case 'dash':
-        snake.tryDash(this.config);
-        break;
-      case 'freeze':
-        snake.applyFreeze(this.config);
-        break;
-      case 'wall':
-        const newWalls = snake.tryWall(this.config);
-        if (newWalls) {
-          this.walls.push(...newWalls);
-        }
-        break;
-    }
+    // ❌ sécurité serveur : skill non équipée
+    if (!snake.loadout || !snake.loadout.includes(skill)) return;
+    snake.useSkill(skill);
   }
 
+  // ================================
+  // ÉTAT PUBLIC
+  // ================================
   getState() {
     const snakesState = {};
     for (const id in this.snakes) {

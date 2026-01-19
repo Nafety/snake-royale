@@ -1,66 +1,104 @@
+// server/Snake.js
 class Snake {
-  constructor(config, skills = {}) {
+  constructor(config, skillsDB = {}, loadout = []) {
     this.config = config;
-    this.skills = skills; // compétences du joueur
 
-    // Corps du serpent
+    // 🔹 compétences disponibles globalement
+    this.skillsDB = skillsDB;
+
+    // 🔹 compétences équipées par le joueur
+    this.loadout = loadout; // ['dash', 'freeze']
+
+    // ===== Corps =====
     this.body = [{ ...config.game.snake.startPos }];
     this.length = config.game.snake.startLength;
+
     this.dir = { x: 0, y: 0 };
     this.nextDir = { x: 0, y: 0 };
 
-    // Gestion des effets / cooldowns
-    this.effects = {};        // ex: { dashUntil: timestamp }
-    this.cooldowns = {};      // ex: { dash: timestamp }
+    // ===== États =====
+    this.effects = {};
+    this.cooldowns = {};
     this.frozenUntil = 0;
   }
 
-  // ====== Direction ======
-  setDirection(dir) {
-    this.nextDir = dir; // stocke seulement l’intention
+  // =========================
+  // LOADOUT
+  // =========================
+  setLoadout(loadout = []) {
+    this.loadout = loadout;
   }
 
-  // ====== Compétences ======
-  canUseSkill(name, costLength, cooldownMs) {
+  hasSkill(skill) {
+    return this.loadout.includes(skill);
+  }
+
+  // =========================
+  // INPUT
+  // =========================
+  setDirection(dir) {
+    this.nextDir = dir;
+  }
+
+  // =========================
+  // SKILLS CORE
+  // =========================
+  canUseSkill(name) {
+    const skill = this.skillsDB[name];
     const now = Date.now();
 
-    if (this.length <= costLength) return false;
+    if (!skill) return false;
+    if (!this.hasSkill(name)) return false;
+
+    if (this.length <= skill.cost) return false;
     if (this.cooldowns[name] && this.cooldowns[name] > now) return false;
 
-    this.length -= costLength;       // coût en longueur
-    this.cooldowns[name] = now + cooldownMs;
+    // coût
+    this.length -= skill.cost;
+    this.cooldowns[name] = now + skill.cooldownMs;
+
     return true;
   }
 
-  tryDash() {
-    const skill = this.skills.dash;
-    if (!skill) return false;
+  useSkill(name) {
+    switch (name) {
+      case 'dash':
+        return this._dash();
+      case 'freeze':
+        return this._freeze();
+      case 'wall':
+        return this._wall();
+      default:
+        return false;
+    }
+  }
 
-    if (!this.canUseSkill('dash', skill.cost, skill.cooldownMs)) return false;
+  // =========================
+  // SKILL IMPLEMENTATIONS
+  // =========================
+  _dash() {
+    const skill = this.skillsDB.dash;
+    if (!this.canUseSkill('dash')) return false;
 
     for (let i = 0; i < skill.numberOfCells; i++) {
       this.move();
     }
 
-    this.effects.dashUntil = Date.now() + 200;
+    this.effects.dashUntil = Date.now() + skill;
     return true;
   }
 
-  applyFreeze() {
-    const skill = this.skills.freeze;
-    if (!skill) return false;
-
-    if (!this.canUseSkill('freeze', skill.cost, skill.cooldownMs)) return false;
+  _freeze() {
+    const skill = this.skillsDB.freeze;
+    if (!this.canUseSkill('freeze')) return false;
 
     this.frozenUntil = Date.now() + skill.durationMs;
     return true;
   }
 
-  tryWall() {
-    const skill = this.skills.wall;
-    if (!skill) return null;
-
-    if (!this.canUseSkill('wall', skill.cost, skill.cooldownMs)) return null;
+  _wall() {
+    const skill = this.skillsDB.wall;
+    if (!this.canUseSkill('wall')) return null;
 
     const head = this.head();
     const now = Date.now();
@@ -77,7 +115,9 @@ class Snake {
     return walls;
   }
 
-  // ====== Déplacement ======
+  // =========================
+  // MOVE
+  // =========================
   move() {
     if (this.isFrozen()) return;
 
@@ -86,25 +126,24 @@ class Snake {
       this.dir.x + this.nextDir.x === 0 &&
       this.dir.y + this.nextDir.y === 0
     ) {
-      // ignore le virage
+      // ignore demi-tour
     } else {
       this.dir = this.nextDir;
     }
 
     const head = this.head();
-    let nextX = head.x + this.dir.x;
-    let nextY = head.y + this.dir.y;
+    let x = head.x + this.dir.x;
+    let y = head.y + this.dir.y;
 
-    const maxX = this.config.game.map.width;
-    const maxY = this.config.game.map.height;
+    const { width, height } = this.config.game.map;
 
-    // Wrapping
-    if (nextX >= maxX) nextX = 0;
-    if (nextX < 0) nextX = maxX - 1;
-    if (nextY >= maxY) nextY = 0;
-    if (nextY < 0) nextY = maxY - 1;
+    // wrapping
+    if (x >= width) x = 0;
+    if (x < 0) x = width - 1;
+    if (y >= height) y = 0;
+    if (y < 0) y = height - 1;
 
-    this.body.push({ x: nextX, y: nextY });
+    this.body.push({ x, y });
 
     while (this.body.length > this.length) {
       this.body.shift();
@@ -115,26 +154,36 @@ class Snake {
     this.length += amount;
   }
 
-  // ====== Reset / Mort ======
+  // =========================
+  // RESET
+  // =========================
   reset() {
     if (this.config.game.snake.respawnAfterDeath === false) {
       if (this.config.game.snake.dammageOnCollision) {
         this.length -= this.config.game.snake.dammageCollision;
         if (this.length < 1) this.length = 1;
       }
-    } else {
-      this.length = this.config.game.snake.respawnLength;
-      this.body = [];
-      for (let i = 0; i < this.length; i++) {
-        this.body.push({ ...this.config.game.snake.startPos });
-      }
-      this.dir = { x: 0, y: 0 };
-      this.effects = {};
-      this.cooldowns = {};
-      this.frozenUntil = 0;
+      return;
     }
+
+    this.length = this.config.game.snake.respawnLength;
+    this.body = [];
+
+    for (let i = 0; i < this.length; i++) {
+      this.body.push({ ...this.config.game.snake.startPos });
+    }
+
+    this.dir = { x: 0, y: 0 };
+    this.nextDir = { x: 0, y: 0 };
+
+    this.effects = {};
+    this.cooldowns = {};
+    this.frozenUntil = 0;
   }
 
+  // =========================
+  // HELPERS
+  // =========================
   isFrozen() {
     return this.frozenUntil && Date.now() < this.frozenUntil;
   }

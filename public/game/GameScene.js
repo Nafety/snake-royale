@@ -26,6 +26,7 @@ export class GameScene extends Phaser.Scene {
   init(data) {
     this.mode = data.mode;
     this.config = data.config;
+    this.playerLoadout = data.loadout;
     this.gridWidth = this.config.gridWidth;
     this.gridHeight = this.config.gridHeight;
 
@@ -44,14 +45,18 @@ export class GameScene extends Phaser.Scene {
       { fill: '#fff', fontSize: '20px' }
     );
 
-    socketManager.emit('joinGame', this.mode);
-
+    socketManager.emit('joinGame', {
+      mode: this.mode,
+      loadout: this.playerLoadout
+    });
+    console.log('Emitted joinGame with payload:', { mode: this.mode, loadout: this.playerLoadout });
     this.scale.on('resize', (gameSize) => {
       this.onResize(gameSize.width, gameSize.height);
     });
 
     // ✅ START = point d’entrée réel de la partie
     socketManager.on('start', ({ playerId, skills, loadout }) => {
+      console.log('Game started for playerId:', playerId, 'with skills:', skills, 'and loadout:', loadout);
       this.playerId = playerId;
       this.gameStarted = true;
       this.skills = skills;
@@ -75,6 +80,7 @@ export class GameScene extends Phaser.Scene {
         offsetX,
         offsetY
       );
+      console.log('Renderer initialized with pixelSize:', this.pixelSize, 'offsetX:', offsetX, 'offsetY:', offsetY);
       if (this.useSkills) {
         // Hydratation des skills du joueur
         this.playerSkills = {};
@@ -84,8 +90,9 @@ export class GameScene extends Phaser.Scene {
             this.playerSkills[itemId] = this.skills[itemId];
           }
         }
-
+        console.log('playerSkills après hydratation:', this.playerSkills);
         this.inputManager.bindSkills(this.playerSkills);
+        console.log('InputManager bindSkills called');
       }
       this.statusText.setText(`Partie démarrée (${this.mode}) !`);
     });
