@@ -8,44 +8,35 @@ export class GameScene extends Phaser.Scene {
 
     this.inputManager = null;
     this.renderer = null;
+
     this.snakesData = {};
+    this.walls = [];
+    this.apple = null;
+
     this.playerId = null;
     this.playerSnakeCreated = false;
-    this.apple = null;
     this.gameStarted = false;
-    this.statusText = null;
+
     this.mode = null;
-    this.walls = [];
-    this.gridWidth = null;
-    this.gridHeight = null;
-    this.pixelSize = null;
     this.config = null;
-    this.paddingX = 0;
-    this.paddingY = 0;
+    this.skills = {};
+    this.statusText = null;
   }
 
   init(data) {
     this.mode = data.mode;
     this.config = data.config;
-    console.log("Config de jeu reçue :", this.config);
-
     this.gridWidth = this.config.gridWidth;
     this.gridHeight = this.config.gridHeight;
 
-    this.paddingX = this.config.paddingX || 0;
-    this.paddingY = this.config.paddingY || 0;
-
+    this.paddingX = this.config.paddingX;
+    this.paddingY = this.config.paddingY;
+    this.useSkills = this.config.useSkills;
     this.calculatePixelSize(window.innerWidth, window.innerHeight);
   }
 
   create() {
-    const offsetX = (window.innerWidth - this.gridWidth * this.pixelSize) / 2;
-    const offsetY = (window.innerHeight - this.gridHeight * this.pixelSize) / 2;
-
     this.inputManager = new InputManager(this);
-    this.renderer = new SnakeRenderer(this, this.pixelSize, this.gridWidth, this.gridHeight, offsetX, offsetY);
-
-    socketManager.emit('joinGame', this.mode);
 
     this.statusText = this.add.text(
       10, 10,
@@ -53,20 +44,57 @@ export class GameScene extends Phaser.Scene {
       { fill: '#fff', fontSize: '20px' }
     );
 
+    socketManager.emit('joinGame', this.mode);
+
     this.scale.on('resize', (gameSize) => {
       this.onResize(gameSize.width, gameSize.height);
     });
 
-    socketManager.on('start', ({ playerId }) => {
+    // ✅ START = point d’entrée réel de la partie
+    socketManager.on('start', ({ playerId, skills, loadout }) => {
       this.playerId = playerId;
       this.gameStarted = true;
-      if (this.statusText) this.statusText.setText(`Partie démarrée (${this.mode}) !`);
+      this.skills = skills;
+      this.playerLoadout = loadout;
+
+      this.gridWidth = this.config.gridWidth;
+      this.gridHeight = this.config.gridHeight;
+      this.paddingX = this.config.paddingX || 0;
+      this.paddingY = this.config.paddingY || 0;
+
+      this.calculatePixelSize(window.innerWidth, window.innerHeight);
+
+      const offsetX = (window.innerWidth - this.gridWidth * this.pixelSize) / 2;
+      const offsetY = (window.innerHeight - this.gridHeight * this.pixelSize) / 2;
+
+      this.renderer = new SnakeRenderer(
+        this,
+        this.pixelSize,
+        this.gridWidth,
+        this.gridHeight,
+        offsetX,
+        offsetY
+      );
+      if (this.useSkills) {
+        // Hydratation des skills du joueur
+        this.playerSkills = {};
+        console.log('skills reçus du serveur:', this.skills);
+        for (const itemId of loadout) {
+          if (this.skills[itemId]) {
+            this.playerSkills[itemId] = this.skills[itemId];
+          }
+        }
+
+        this.inputManager.bindSkills(this.playerSkills);
+      }
+      this.statusText.setText(`Partie démarrée (${this.mode}) !`);
     });
 
     socketManager.on('state', state => {
-      if (!this.gameStarted) return;
+      if (!this.gameStarted || !this.renderer) return;
       this.snakesData = state.snakes;
       this.walls = state.walls;
+
       if (!this.apple) {
         this.renderer.createApple(state.apple.x, state.apple.y);
         this.apple = this.renderer.apple;
@@ -76,9 +104,10 @@ export class GameScene extends Phaser.Scene {
 
       for (const id in state.snakes) {
         const snake = state.snakes[id];
+
         if (id === this.playerId) {
           if (!this.playerSnakeCreated) {
-            const head = snake.body[snake.body.length - 1];
+            const head = snake.body.at(-1);
             this.renderer.createPlayerSnake(head.x, head.y);
             this.playerSnakeCreated = true;
           }
@@ -87,6 +116,7 @@ export class GameScene extends Phaser.Scene {
           this.renderer.updateOtherSnakes({ [id]: snake }, this.playerId);
         }
       }
+
       this.renderer.updateWalls(this.walls);
     });
 
@@ -98,39 +128,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   update() {
-    if (!this.playerSnakeCreated || !this.gameStarted) return;
+    if (!this.gameStarted || !this.playerSnakeCreated) return;
 
-    // ==== Déplacement ====
     if (this.inputManager.update()) {
-      const dir = this.inputManager.getDirection();
-      socketManager.emit('input', dir);
+      socketManager.emit('input', this.inputManager.getDirection());
     }
 
-    // ==== Compétences AZER ====
     while (this.inputManager.hasSkillInput()) {
       const skill = this.inputManager.consumeSkillInput();
-      if (skill) {
-        console.log(`Envoi skill au serveur: ${skill}`);
-        socketManager.emit('useSkill', { skill });
-      }
+      socketManager.emit('useSkill', { skill });
     }
   }
 
   calculatePixelSize(width, height) {
     const availableWidth = width - this.paddingX;
     const availableHeight = height - this.paddingY;
-    this.pixelSize = Math.floor(Math.min(availableWidth / this.gridWidth, availableHeight / this.gridHeight));
+    this.pixelSize = Math.floor(
+      Math.min(
+        availableWidth / this.gridWidth,
+        availableHeight / this.gridHeight
+      )
+    );
   }
 
   onResize(newWidth, newHeight) {
+    if (!this.renderer || !this.config) return;
+
     this.calculatePixelSize(newWidth, newHeight);
 
     const offsetX = (newWidth - this.gridWidth * this.pixelSize) / 2;
     const offsetY = (newHeight - this.gridHeight * this.pixelSize) / 2;
 
-    if (this.renderer) {
-      this.renderer.updatePixelSize(this.pixelSize, offsetX, offsetY);
-      this.renderer.redraw(this.snakesData, this.apple, this.walls);
-    }
+    this.renderer.updatePixelSize(this.pixelSize, offsetX, offsetY);
+    this.renderer.redraw(this.snakesData, this.apple, this.walls);
   }
 }

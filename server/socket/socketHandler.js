@@ -51,17 +51,17 @@ module.exports = function(io, sessionMiddleware) {
           Object.keys(room.snakes).forEach(id => {
             io.to(id).emit('start', {
               playerId: id,
-              config: room.config
+              skills: room.skills,
+              loadout: room.getPlayerLoadout(id)
             });
           });
-
+          console.log(`Room ${room.id} démarre la partie, players: ${Object.keys(room.snakes).join(', ')}, mode: ${mode},   skills: ${Object.keys(room.skills).join(', ')}`);
           room.interval = setInterval(() => {
             room.update();
 
             room.resetThisFrame.forEach(socketId => {
               io.to(socketId).emit('playerReset');
             });
-
             io.to(room.id).emit('state', room.getState());
           }, room.config.server.tickRate);
 
@@ -87,10 +87,10 @@ module.exports = function(io, sessionMiddleware) {
       const room = Object.values(rooms).find(r => r.snakes[socket.id]);
       if (!room) return;
 
-      console.log(`Player ${socket.id} uses skill: ${skill}`);
+      console.log(`Player ${socket.id} tries to use the skill: ${skill}`);
       room.useSkill(socket.id, skill);
     });
-
+    
     // DISCONNECT
     socket.on('disconnect', () => {
       const room = Object.values(rooms).find(r => r.snakes[socket.id]);

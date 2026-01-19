@@ -4,8 +4,7 @@ const { Server } = require('socket.io');
 const session = require('express-session');
 
 const setupSockets = require('./socket/socketHandler');
-const config = require('./configs/classic');
-
+const PORT = 3000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -37,10 +36,10 @@ app.use(express.static('public'));
 setupSockets(io, sessionMiddleware);
 
 // ================= SERVER =================
-server.listen(config.server.port, () => {
-  console.log(`✅ Server running on http://localhost:${config.server.port}`);
+server.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
 
-//server.listen(config.server.port, '0.0.0.0', () => {
-//  console.log(`✅ Server running on http://0.0.0.0:${config.server.port}`);
+//server.listen(PORT, '0.0.0.0', () => {
+//  console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
 //});

@@ -1,7 +1,6 @@
 module.exports = {
   server: {
-    port: 3000,
-    tickRate: 100
+    tickRate: 50
   },
 
   game: {
@@ -12,25 +11,7 @@ module.exports = {
       paddingX: 50,    // total gauche + droite
       paddingY: 50   // total haut + bas
     },
-    skills: {
-      dash: {
-        cost: 1,
-        numberOfCells: 5,
-        cooldownMs: 5000
-      },
-      freeze: {
-        cost: 2,
-        durationMs: 3000,
-        cooldownMs: 8000
-      },
-      wall: {
-        cost: 3,
-        numberOfCells: 3,
-        durationMs: 5000,
-        cooldownMs: 10000
-      },
-    },
-
+    useSkills: true,
     snake: {
       startLength: 3,
       respawnLength: 2,
@@ -42,7 +23,6 @@ module.exports = {
       startPos: { x: 10, y: 10 }  // coordonnées GRILLE (pas pixels)
     }
   },
-
   maxPlayers: 2,    // nombre de joueurs requis pour démarrer
   mode: 'classic'   // identifiant du mode de jeu
 };

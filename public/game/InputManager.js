@@ -5,15 +5,30 @@ export class InputManager {
     // Déplacement flèches
     this.cursors = scene.input.keyboard.createCursorKeys();
     this.lastDirection = { x: 0, y: 0 }; // direction actuelle envoyée
+    if (this.scene.useSkills) {
+      // Queue des skills
+      this.skillQueue = [];
 
-    // Compétences AZER
-    this.skillQueue = [];
+      // Stockage des handlers pour pouvoir les retirer si nécessaire
+      this.skillHandlers = {};
+    }}
 
-    // Setup listeners pour chaque touche
-    this.scene.input.keyboard.on('keydown-A', () => this._enqueueSkill('dash'));
-    this.scene.input.keyboard.on('keydown-Z', () => this._enqueueSkill('freeze'));
-    this.scene.input.keyboard.on('keydown-E', () => this._enqueueSkill('wall'));
-    this.scene.input.keyboard.on('keydown-R', () => this._enqueueSkill('shield')); // futur
+  // === BIND DYNAMIQUE DES SKILLS ===
+  bindSkills(playerSkills) {
+    // Supprime les anciens listeners
+    for (const bind in this.skillHandlers) {
+      this.scene.input.keyboard.off(`keydown-${bind}`, this.skillHandlers[bind]);
+    }
+    this.skillHandlers = {};
+
+    // Bind des nouveaux skills
+    for (const [skillName, skill] of Object.entries(playerSkills)) {
+      const handler = () => this._enqueueSkill(skillName);
+      this.scene.input.keyboard.on(`keydown-${skill.bind}`, handler);
+      this.skillHandlers[skill.bind] = handler;
+
+      console.log(`Binding skill ${skillName} to key ${skill.bind}`);
+    }
   }
 
   _enqueueSkill(skillName) {
@@ -50,7 +65,6 @@ export class InputManager {
   consumeSkillInput() {
     if (!this.hasSkillInput()) return null;
     const skill = this.skillQueue.shift();
-    console.log(`Skill consumed: ${skill}`);
     return skill;
   }
 }

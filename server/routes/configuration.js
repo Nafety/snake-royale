@@ -11,6 +11,7 @@ function getFrontGameConfig(gameConfig) {
     gridHeight: gameConfig.game.map.height,
     paddingX: gameConfig.game.map.paddingX,
     paddingY: gameConfig.game.map.paddingY,
+    useSkills: gameConfig.game.useSkills
   };
 }
 
@@ -26,7 +27,7 @@ router.get("/:mode", (req, res) => {
     res.json({
       ok: true,
       mode,
-      frontConfig: getFrontGameConfig(gameConfig)
+      frontConfig: getFrontGameConfig(gameConfig),
     });
   } catch (err) {
     return res.status(404).json({

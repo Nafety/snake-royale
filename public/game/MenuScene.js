@@ -19,7 +19,7 @@ export class MenuScene extends Phaser.Scene {
         if (!data.ok) return alert("Mode de jeu invalide");
 
         // Lancer la scène avec la config déjà chargée
-        this.scene.start('GameScene', { mode, config: data.frontConfig });
+        this.scene.start('GameScene', { mode, config: data.frontConfig});
       } catch (err) {
         console.error("Erreur en chargeant la config :", err);
         alert("Impossible de charger la config du jeu");

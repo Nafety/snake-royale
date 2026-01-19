@@ -2,10 +2,12 @@
 const Snake = require('./Snake');
 const Apple = require('./Apple');
 const { collide } = require('./collisions');
+const { SKILLS_DB } = require('../skills');
 
 class GameRoom {
   constructor(config) {
     this.config = config;
+    this.skills = SKILLS_DB;
     this.snakes = {};              // { socketId: Snake }
     this.apple = new Apple(config);
     this.resetThisFrame = new Set(); // Track qui a reset ce frame
@@ -13,7 +15,7 @@ class GameRoom {
   }
 
   addPlayer(socketId) {
-    this.snakes[socketId] = new Snake(this.config);
+    this.snakes[socketId] = new Snake(this.config, this.skills);
   }
 
   removePlayer(socketId) {
@@ -57,6 +59,10 @@ class GameRoom {
     this.checkCollisions();
   }
 
+  getPlayerLoadout(playerId) {
+    // Pour l'instant, loadout fixe
+    return ['dash', 'freeze'];
+  }
 
   checkCollisions() {
     const { config } = this;
@@ -103,6 +109,7 @@ class GameRoom {
   // GESTION DES COMPÉTENCES
   // ================================
   useSkill(playerId, skill) {
+    if (!this.config.game.useSkills) return;
     const snake = this.snakes[playerId];
     if (!snake) return;
 

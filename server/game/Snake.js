@@ -1,6 +1,7 @@
 class Snake {
-  constructor(config) {
+  constructor(config, skills = {}) {
     this.config = config;
+    this.skills = skills; // compétences du joueur
 
     // Corps du serpent
     this.body = [{ ...config.game.snake.startPos }];
@@ -16,10 +17,8 @@ class Snake {
 
   // ====== Direction ======
   setDirection(dir) {
-    // Stocke seulement l’intention
-    this.nextDir = dir;
+    this.nextDir = dir; // stocke seulement l’intention
   }
-
 
   // ====== Compétences ======
   canUseSkill(name, costLength, cooldownMs) {
@@ -33,34 +32,34 @@ class Snake {
     return true;
   }
 
-  // Dash : avance plusieurs cases instantanément
-  tryDash(config) {
-    const skill = config.game.skills.dash;
+  tryDash() {
+    const skill = this.skills.dash;
+    if (!skill) return false;
+
     if (!this.canUseSkill('dash', skill.cost, skill.cooldownMs)) return false;
 
     for (let i = 0; i < skill.numberOfCells; i++) {
-      this.move(config);
+      this.move();
     }
 
-    this.effects.dashUntil = Date.now() + 200; // effet visuel côté client
+    this.effects.dashUntil = Date.now() + 200;
     return true;
   }
 
-  // Freeze : immobilise le serpent
-  applyFreeze(config) {
-    const skill = config.game.skills.freeze;
+  applyFreeze() {
+    const skill = this.skills.freeze;
+    if (!skill) return false;
+
     if (!this.canUseSkill('freeze', skill.cost, skill.cooldownMs)) return false;
+
     this.frozenUntil = Date.now() + skill.durationMs;
     return true;
   }
 
-  isFrozen() {
-    return this.frozenUntil && Date.now() < this.frozenUntil;
-  }
+  tryWall() {
+    const skill = this.skills.wall;
+    if (!skill) return null;
 
-  // Wall : créer des murs devant le serpent
-  tryWall(config) {
-    const skill = config.game.skills.wall;
     if (!this.canUseSkill('wall', skill.cost, skill.cooldownMs)) return null;
 
     const head = this.head();
@@ -71,19 +70,19 @@ class Snake {
       walls.push({
         x: head.x + i * this.dir.x,
         y: head.y + i * this.dir.y,
-        expiresAt: now + (skill.durationMs || 5000) // durée en ms, default 5s si absent
+        expiresAt: now + (skill.durationMs || 5000)
       });
     }
 
     return walls;
   }
 
-
   // ====== Déplacement ======
-  move(config) {
+  move() {
     if (this.isFrozen()) return;
+
     if (
-      !config.game.snake.inversionAllowed &&
+      !this.config.game.snake.inversionAllowed &&
       this.dir.x + this.nextDir.x === 0 &&
       this.dir.y + this.nextDir.y === 0
     ) {
@@ -91,12 +90,13 @@ class Snake {
     } else {
       this.dir = this.nextDir;
     }
+
     const head = this.head();
     let nextX = head.x + this.dir.x;
     let nextY = head.y + this.dir.y;
 
-    const maxX = config.game.map.width;
-    const maxY = config.game.map.height;
+    const maxX = this.config.game.map.width;
+    const maxY = this.config.game.map.height;
 
     // Wrapping
     if (nextX >= maxX) nextX = 0;
@@ -116,23 +116,27 @@ class Snake {
   }
 
   // ====== Reset / Mort ======
-  reset(config) {
-    if (config.game.snake.respawnAfterDeath === false) {
-      if (config.game.snake.dammageOnCollision) {
-        this.length -= config.game.snake.dammageCollision;
+  reset() {
+    if (this.config.game.snake.respawnAfterDeath === false) {
+      if (this.config.game.snake.dammageOnCollision) {
+        this.length -= this.config.game.snake.dammageCollision;
         if (this.length < 1) this.length = 1;
       }
     } else {
-      this.length = config.game.snake.respawnLength;
+      this.length = this.config.game.snake.respawnLength;
       this.body = [];
       for (let i = 0; i < this.length; i++) {
-        this.body.push({ ...config.game.snake.startPos });
+        this.body.push({ ...this.config.game.snake.startPos });
       }
       this.dir = { x: 0, y: 0 };
       this.effects = {};
       this.cooldowns = {};
       this.frozenUntil = 0;
     }
+  }
+
+  isFrozen() {
+    return this.frozenUntil && Date.now() < this.frozenUntil;
   }
 
   head() {
