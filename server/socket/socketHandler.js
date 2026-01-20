@@ -1,7 +1,18 @@
-// server/index.js (ou ton fichier socket)
+// server/index.js
 const GameRoom = require('../game/GameRoom');
 const path = require('path');
 const { SKILLS_DB } = require('../skills');
+
+function getFrontGameConfig(gameConfig) {
+  return {
+    pixelSize: gameConfig.game.pixelSize,
+    gridWidth: gameConfig.game.map.width,
+    gridHeight: gameConfig.game.map.height,
+    paddingX: gameConfig.game.map.paddingX,
+    paddingY: gameConfig.game.map.paddingY,
+    useSkills: gameConfig.game.useSkills
+  };
+}
 
 const rooms = {};         // toutes les rooms actives { roomId: GameRoom }
 const waitingRooms = {};  // rooms en attente par mode { mode: [GameRoom] }
@@ -14,7 +25,6 @@ module.exports = function(io, sessionMiddleware) {
   io.on('connection', socket => {
     console.log('🟢 Player connected', socket.id);
 
-    // 🔹 Envoyer immédiatement la DB de compétences au client
     socket.emit('skillsList', SKILLS_DB || {});
 
     socket.on('joinGame', ({ mode = 'classic', loadout = [] }) => {
@@ -27,6 +37,7 @@ module.exports = function(io, sessionMiddleware) {
 
         session.gameMode = mode;
         session.gameConfig = gameConfig;
+        const frontConfig = getFrontGameConfig(gameConfig);
         session.save();
 
         if (!waitingRooms[mode]) waitingRooms[mode] = [];
@@ -41,6 +52,7 @@ module.exports = function(io, sessionMiddleware) {
           const roomId = `room-${Date.now()}`;
           room = new GameRoom(gameConfig, SKILLS_DB);
           room.id = roomId;
+          room.mode = mode; // <-- fix important
           room.started = false;
 
           waitingRooms[mode].push(room);
@@ -59,13 +71,14 @@ module.exports = function(io, sessionMiddleware) {
         if (Object.keys(room.snakes).length === gameConfig.maxPlayers) {
           room.started = true;
 
-
-          // Envoyer le start à tous les joueurs
+          // Envoyer le start à tous les joueurs avec toutes les infos
           Object.keys(room.snakes).forEach(id => {
             const playerLoadout = room.getPlayerLoadout(id);
-            console.log(`Starting game for player ${id}, loadout:`, playerLoadout);
+            console.log(`Starting game for player ${id}, start : `, { mode: mode, config: frontConfig, playerId: id, skills: room.skills, loadout: playerLoadout });
 
             io.to(id).emit('start', {
+              mode: mode,
+              config: frontConfig,
               playerId: id,
               skills: room.skills,
               loadout: playerLoadout
@@ -84,7 +97,10 @@ module.exports = function(io, sessionMiddleware) {
 
             io.to(room.id).emit('state', room.getState());
           }, room.config.server.tickRate);
+
+          // Retirer de waitingRooms
           waitingRooms[mode] = waitingRooms[mode].filter(r => r !== room);
+
         } else {
           // Sinon, joueur en attente
           socket.emit('waiting', { roomId: room.id });
@@ -119,7 +135,7 @@ module.exports = function(io, sessionMiddleware) {
       room.removePlayer(socket.id);
       console.log(`Player ${socket.id} disconnected from room ${room.id}`);
 
-      const mode = room.config.mode;
+      const mode = room.mode || room.config?.mode || 'classic';
 
       if (Object.keys(room.snakes).length === 0) {
         clearInterval(room.interval);
