@@ -1,50 +1,69 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Menu from "./pages/menu/Menu";
 import { MusicProvider } from "./components/MusicProvider";
-import { launchPhaser } from "./phaser/PhaserGame";
-import type { GameInitData } from "./phaser/PhaserGame";
+import {
+  launchPhaser,
+  destroyPhaser,
+  type GameInitData,
+} from "./phaser/PhaserGame";
+
 export default function App() {
-  const [showMenu, setShowMenu] = useState(true);
   const [gameData, setGameData] = useState<GameInitData | null>(null);
 
   const startGame = (data: GameInitData) => {
     setGameData(data);
-    setShowMenu(false); // cache le menu
-    launchPhaser(data); // lance Phaser
   };
+
+  const quitGame = () => {
+    setGameData(null);
+  };
+
+  // 🔥 bridge React → Phaser
+  useEffect(() => {
+    if (gameData) {
+      launchPhaser(gameData);
+    } else {
+      destroyPhaser();
+    }
+
+    return () => {
+      destroyPhaser();
+    };
+  }, [gameData]);
 
   return (
     <MusicProvider>
-      {/* Phaser root */}
+      {/* Phaser container */}
       <div
         id="phaser-root"
         style={{
-          width: "100%",
-          height: "100%",
           position: "absolute",
-          top: 0,
-          left: 0,
+          inset: 0,
           zIndex: 0,
         }}
-      ></div>
+      />
 
-      {/* Menu overlay */}
-      {showMenu && (
+      {/* React UI */}
+      {!gameData && (
         <div
           style={{
             position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
+            inset: 0,
             zIndex: 10,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
           }}
         >
           <Menu onStart={startGame} />
         </div>
+      )}
+
+      {/* exemple bouton quitter */}
+      {gameData && (
+        <button
+          style={{ position: "absolute", zIndex: 20, top: 20, left: 20 }}
+          onClick={quitGame}
+        >
+          Quitter
+        </button>
       )}
     </MusicProvider>
   );

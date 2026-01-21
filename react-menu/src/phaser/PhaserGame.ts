@@ -13,22 +13,16 @@ export type GameInitData = {
 };
 
 export function launchPhaser(initData: GameInitData) {
-  if (game) {
-    console.warn("Game déjà lancé !");
-    return;
-  }
+  if (game) return;
 
   const phaserRoot = document.getElementById("phaser-root");
-  if (!phaserRoot) {
-    console.error("Div #phaser-root introuvable !");
-    return;
-  }
+  if (!phaserRoot) return;
 
   game = new Phaser.Game({
     type: Phaser.AUTO,
+    parent: phaserRoot,
     width: window.innerWidth,
     height: window.innerHeight,
-    parent: phaserRoot,
     scene: [GameScene],
     scale: {
       mode: Phaser.Scale.RESIZE,
@@ -38,4 +32,15 @@ export function launchPhaser(initData: GameInitData) {
   });
 
   game.scene.start("GameScene", initData);
+}
+
+export function destroyPhaser() {
+  if (!game) return;
+
+  game.destroy(true); // true = remove canvas + events
+  game = null;
+
+  // sécurité : vider le container
+  const root = document.getElementById("phaser-root");
+  if (root) root.innerHTML = "";
 }
