@@ -1,21 +1,44 @@
+// react-menu/src/phaser/InputManager.ts
+import Phaser from "phaser";
+
+type Direction = { x: number; y: number };
+
+type Skill = {
+  bind: string;
+};
+
 export class InputManager {
-  constructor(scene) {
+  scene: Phaser.Scene & { useSkills?: boolean };
+  cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+  lastDirection: Direction;
+
+  // Skills
+  skillQueue: string[];
+  skillHandlers: Record<string, (event?: KeyboardEvent) => void>;
+
+  constructor(scene: Phaser.Scene & { useSkills?: boolean }) {
     this.scene = scene;
 
     // Déplacement flèches
-    this.cursors = scene.input.keyboard.createCursorKeys();
-    this.lastDirection = { x: 0, y: 0 }; // direction actuelle envoyée
-    if (this.scene.useSkills) {
-      // Queue des skills
-      this.skillQueue = [];
+    if (!scene.input.keyboard) {
+      throw new Error("Keyboard input not enabled on this scene!");
+    }
 
-      // Stockage des handlers pour pouvoir les retirer si nécessaire
-      this.skillHandlers = {};
-    }}
+    this.cursors = scene.input.keyboard.createCursorKeys();
+
+    this.lastDirection = { x: 0, y: 0 };
+
+    // Skills
+    this.skillQueue = [];
+    this.skillHandlers = {};
+  }
 
   // === BIND DYNAMIQUE DES SKILLS ===
-  bindSkills(playerSkills) {
+  bindSkills(playerSkills: Record<string, Skill>) {
     // Supprime les anciens listeners
+    if (!this.scene.input.keyboard) {
+      throw new Error("Keyboard input not enabled on this scene!");
+    }
     for (const bind in this.skillHandlers) {
       this.scene.input.keyboard.off(`keydown-${bind}`, this.skillHandlers[bind]);
     }
@@ -31,14 +54,14 @@ export class InputManager {
     }
   }
 
-  _enqueueSkill(skillName) {
+  private _enqueueSkill(skillName: string) {
     console.log(`Skill pressed: ${skillName}`);
     this.skillQueue.push(skillName);
   }
 
   // === DIRECTION ===
-  update() {
-    let dir = { x: 0, y: 0 };
+  update(): boolean {
+    let dir: Direction = { x: 0, y: 0 };
 
     if (this.cursors.left.isDown) dir = { x: -1, y: 0 };
     else if (this.cursors.right.isDown) dir = { x: 1, y: 0 };
@@ -53,18 +76,18 @@ export class InputManager {
     return false;
   }
 
-  getDirection() {
+  getDirection(): Direction {
     return { ...this.lastDirection };
   }
 
   // === SKILLS ===
-  hasSkillInput() {
+  hasSkillInput(): boolean {
     return this.skillQueue.length > 0;
   }
 
-  consumeSkillInput() {
+  consumeSkillInput(): string | null {
     if (!this.hasSkillInput()) return null;
-    const skill = this.skillQueue.shift();
+    const skill = this.skillQueue.shift()!;
     return skill;
   }
 }

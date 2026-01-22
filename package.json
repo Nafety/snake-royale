@@ -4,7 +4,9 @@
   "description": "Prototype Snake 1v1 Phaser + Node + Socket.IO",
   "main": "server.js",
   "scripts": {
-    "start": "node server/index.js"
+    "dev:react": "cd react-menu/ && npm run dev",
+    "dev:server": "cd server && node index.js",
+    "start": "concurrently \"npm run dev:react\" \"npm run dev:server\""
   },
   "dependencies": {
     "express": "^5.2.1",

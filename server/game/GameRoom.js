@@ -163,7 +163,10 @@ class GameRoom {
 
     // ❌ sécurité serveur : skill non équipée
     if (!snake.loadout || !snake.loadout.includes(skill)) return;
-    snake.useSkill(skill);
+    const res = snake.useSkill(skill);
+    if (skill === 'wall' && res) {
+      this.walls.push(...res);
+    }
   }
 
   // ================================
@@ -174,7 +177,6 @@ class GameRoom {
     for (const id in this.snakes) {
       snakesState[id] = this.snakes[id].getPublicState();
     }
-
     return {
       snakes: snakesState,
       apple: this.apple.pos,

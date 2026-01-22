@@ -4,16 +4,7 @@ const { get } = require("http");
 const path = require("path");
 const router = express.Router();
 
-function getFrontGameConfig(gameConfig) {
-  return {
-    pixelSize: gameConfig.game.pixelSize,
-    gridWidth: gameConfig.game.map.width,
-    gridHeight: gameConfig.game.map.height,
-    paddingX: gameConfig.game.map.paddingX,
-    paddingY: gameConfig.game.map.paddingY,
-    useSkills: gameConfig.game.useSkills
-  };
-}
+
 
 router.get("/:mode", (req, res) => {
   const { mode } = req.params;

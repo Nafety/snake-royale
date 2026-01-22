@@ -30,7 +30,7 @@ io.use((socket, next) => {
 });
 
 // ================= STATIC =================
-app.use(express.static('public'));
+app.use(express.static('client/phaser/public'));
 
 // ================= SOCKETS =================
 setupSockets(io, sessionMiddleware);

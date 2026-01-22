@@ -1,12 +1,23 @@
-// server/index.js (ou ton fichier socket)
+// server/index.js
 const GameRoom = require('../game/GameRoom');
 const path = require('path');
 const { SKILLS_DB } = require('../skills');
 
-const rooms = {};         // toutes les rooms actives { roomId: GameRoom }
-const waitingRooms = {};  // rooms en attente par mode { mode: [GameRoom] }
+function getFrontGameConfig(gameConfig) {
+  return {
+    pixelSize: gameConfig.game.pixelSize,
+    gridWidth: gameConfig.game.map.width,
+    gridHeight: gameConfig.game.map.height,
+    paddingX: gameConfig.game.map.paddingX,
+    paddingY: gameConfig.game.map.paddingY,
+    useSkills: gameConfig.game.useSkills
+  };
+}
 
-module.exports = function(io, sessionMiddleware) {
+const rooms = {};         // { roomId: GameRoom }
+const waitingRooms = {};  // { mode: [GameRoom] }
+
+module.exports = function (io, sessionMiddleware) {
   io.use((socket, next) => {
     sessionMiddleware(socket.request, {}, next);
   });
@@ -14,67 +25,103 @@ module.exports = function(io, sessionMiddleware) {
   io.on('connection', socket => {
     console.log('🟢 Player connected', socket.id);
 
-    // 🔹 Envoyer immédiatement la DB de compétences au client
-    socket.emit('skillsList', SKILLS_DB || {});
+    /* =========================
+       MENU
+    ========================= */
+
+    socket.on('enterMenu', () => {
+      console.log(`📦 Player ${socket.id} enters menu`);
+      socket.emit('skillsList', SKILLS_DB || {});
+    });
+
+    /* =========================
+       JOIN GAME
+    ========================= */
 
     socket.on('joinGame', ({ mode = 'classic', loadout = [] }) => {
-      const session = socket.request.session;
-      console.log(`Player ${socket.id} requests to join mode: ${mode} with loadout:`, loadout);
+      console.log(
+        `🎮 Player ${socket.id} requests joinGame`,
+        { mode, loadout }
+      );
+
+      // 🔒 sécurité : déjà dans une room ?
+      const alreadyInRoom = Object.values(rooms).find(
+        r => r.snakes[socket.id]
+      );
+      if (alreadyInRoom) {
+        console.warn(`⚠️ Player ${socket.id} already in a room`);
+        return;
+      }
 
       try {
-        const configPath = path.join(__dirname, '..', 'configs', `${mode}.js`);
+        const configPath = path.join(
+          __dirname,
+          '..',
+          'configs',
+          `${mode}.js`
+        );
         const gameConfig = require(configPath);
 
+        const session = socket.request.session;
         session.gameMode = mode;
         session.gameConfig = gameConfig;
         session.save();
 
+        const frontConfig = getFrontGameConfig(gameConfig);
+
         if (!waitingRooms[mode]) waitingRooms[mode] = [];
 
-        // Chercher une room en attente avec de la place
+        // Chercher une room en attente
         let room = waitingRooms[mode].find(
-          r => !r.started && Object.keys(r.snakes).length < gameConfig.maxPlayers
+          r => !r.started &&
+            Object.keys(r.snakes).length < gameConfig.maxPlayers
         );
 
-        // Si aucune room dispo, en créer une
+        // Créer une room si besoin
         if (!room) {
           const roomId = `room-${Date.now()}`;
+
           room = new GameRoom(gameConfig, SKILLS_DB);
           room.id = roomId;
+          room.mode = mode;
           room.started = false;
 
           waitingRooms[mode].push(room);
           rooms[roomId] = room;
 
-          console.log(`Nouvelle room ${roomId} créée pour mode ${mode}`);
+          console.log(`🆕 Room ${roomId} created for mode ${mode}`);
         }
 
-        // Ajouter le joueur avec son loadout
+        // Ajouter le joueur
         room.addPlayer(socket.id, loadout);
         socket.join(room.id);
 
-        console.log(`Player ${socket.id} rejoint room ${room.id} (${Object.keys(room.snakes).length}/${gameConfig.maxPlayers})`);
+        console.log(
+          `👤 Player ${socket.id} joined room ${room.id} ` +
+          `(${Object.keys(room.snakes).length}/${gameConfig.maxPlayers})`
+        );
 
-        // ✅ Démarrer la partie si nombre max atteint
+        // Démarrer la partie si room complète
         if (Object.keys(room.snakes).length === gameConfig.maxPlayers) {
           room.started = true;
 
+          Object.keys(room.snakes).forEach(playerId => {
+            const playerLoadout = room.getPlayerLoadout(playerId);
 
-          // Envoyer le start à tous les joueurs
-          Object.keys(room.snakes).forEach(id => {
-            const playerLoadout = room.getPlayerLoadout(id);
-            console.log(`Starting game for player ${id}, loadout:`, playerLoadout);
-
-            io.to(id).emit('start', {
-              playerId: id,
+            io.to(playerId).emit('start', {
+              mode,
+              config: frontConfig,
+              playerId,
               skills: room.skills,
               loadout: playerLoadout
             });
           });
 
-          console.log(`Room ${room.id} démarre la partie, players: ${Object.keys(room.snakes).join(', ')}, mode: ${mode}`);
+          console.log(
+            `🚀 Room ${room.id} started with players:`,
+            Object.keys(room.snakes)
+          );
 
-          // Lancer la boucle serveur
           room.interval = setInterval(() => {
             room.update();
 
@@ -84,52 +131,92 @@ module.exports = function(io, sessionMiddleware) {
 
             io.to(room.id).emit('state', room.getState());
           }, room.config.server.tickRate);
+
+          // retirer de la file d'attente
           waitingRooms[mode] = waitingRooms[mode].filter(r => r !== room);
         } else {
-          // Sinon, joueur en attente
           socket.emit('waiting', { roomId: room.id });
         }
 
       } catch (err) {
-        console.error(`Erreur loading config pour le mode ${mode}:`, err);
-        socket.emit('error', { message: 'Mode de jeu invalide' });
+        console.error(`❌ Error loading config for mode ${mode}`, err);
+        socket.emit('error', { message: 'Invalid game mode' });
       }
     });
 
-    // INPUT
-    socket.on('input', dir => {
-      const room = Object.values(rooms).find(r => r.snakes[socket.id]);
-      if (room) room.setInput(socket.id, dir);
-    });
+    /* =========================
+       LEAVE GAME (retour menu)
+    ========================= */
 
-    // USE SKILL
-    socket.on('useSkill', ({ skill }) => {
-      const room = Object.values(rooms).find(r => r.snakes[socket.id]);
+    socket.on('leaveGame', () => {
+      const room = Object.values(rooms).find(
+        r => r.snakes[socket.id]
+      );
       if (!room) return;
 
-      console.log(`Player ${socket.id} tries to use the skill: ${skill}`);
-      room.useSkill(socket.id, skill);
-    });
-
-    // DISCONNECT
-    socket.on('disconnect', () => {
-      const room = Object.values(rooms).find(r => r.snakes[socket.id]);
-      if (!room) return;
+      console.log(`🚪 Player ${socket.id} leaves room ${room.id}`);
 
       room.removePlayer(socket.id);
-      console.log(`Player ${socket.id} disconnected from room ${room.id}`);
+      socket.leave(room.id);
 
-      const mode = room.config.mode;
+      const mode = room.mode || 'classic';
 
       if (Object.keys(room.snakes).length === 0) {
         clearInterval(room.interval);
         delete rooms[room.id];
-        waitingRooms[mode] = waitingRooms[mode]?.filter(r => r !== room) || [];
-        console.log(`Room ${room.id} supprimée`);
+        waitingRooms[mode] =
+          waitingRooms[mode]?.filter(r => r !== room) || [];
+        console.log(`🗑️ Room ${room.id} deleted`);
       } else if (!room.started && !waitingRooms[mode].includes(room)) {
         waitingRooms[mode].push(room);
-        console.log(`Room ${room.id} remise en attente`);
+        console.log(`⏳ Room ${room.id} back to waiting`);
       }
+    });
+
+    /* =========================
+       INPUT / SKILLS
+    ========================= */
+
+    socket.on('input', dir => {
+      const room = Object.values(rooms).find(
+        r => r.snakes[socket.id]
+      );
+      if (room) room.setInput(socket.id, dir);
+    });
+
+    socket.on('useSkill', ({ skill }) => {
+      const room = Object.values(rooms).find(
+        r => r.snakes[socket.id]
+      );
+      if (!room) return;
+
+      room.useSkill(socket.id, skill);
+    });
+
+    /* =========================
+       DISCONNECT (onglet fermé)
+    ========================= */
+
+    socket.on('disconnect', () => {
+      const room = Object.values(rooms).find(
+        r => r.snakes[socket.id]
+      );
+      if (!room) return;
+
+      room.removePlayer(socket.id);
+
+      const mode = room.mode || 'classic';
+
+      if (Object.keys(room.snakes).length === 0) {
+        clearInterval(room.interval);
+        delete rooms[room.id];
+        waitingRooms[mode] =
+          waitingRooms[mode]?.filter(r => r !== room) || [];
+      } else if (!room.started && !waitingRooms[mode].includes(room)) {
+        waitingRooms[mode].push(room);
+      }
+
+      console.log(`🔴 Player disconnected ${socket.id}`);
     });
   });
 };
