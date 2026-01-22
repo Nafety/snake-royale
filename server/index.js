@@ -2,7 +2,6 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const session = require('express-session');
-
 const setupSockets = require('./socket/socketHandler');
 const PORT = 3000;
 const app = express();
@@ -19,18 +18,12 @@ const sessionMiddleware = session({
   }
 });
 
-const configurationRouter = require('./routes/configuration');
-app.use("/api/config", configurationRouter);
-
 app.use(sessionMiddleware);
 
 // 👉 partager la session avec socket.io
 io.use((socket, next) => {
   sessionMiddleware(socket.request, {}, next);
 });
-
-// ================= STATIC =================
-app.use(express.static('client/phaser/public'));
 
 // ================= SOCKETS =================
 setupSockets(io, sessionMiddleware);
