@@ -1,7 +1,9 @@
 // src/phaser/GameScene.ts
 import Phaser from "phaser";
 import { InputManager } from "./InputManager";
-import { SnakeRenderer } from "./SnakeRenderer";
+import { SnakeRenderer } from "./renderers/SnakeRenderer";
+import { AppleRenderer } from "./renderers/AppleRenderer";
+import { WallRenderer } from "./renderers/WallRenderer";
 import { socketManager } from "../socket/SocketManager";
 
 export type Skill = { bind: string };
@@ -25,9 +27,10 @@ export class GameScene extends Phaser.Scene {
 
   inputManager: InputManager | null = null;
   snakeRenderer: SnakeRenderer | null = null;
+  appleRenderer: AppleRenderer | null = null;
+  wallRenderer: WallRenderer | null = null;
   snakesData: Record<string, SnakeState> = {};
   walls: any[] = [];
-  apple: any = null;
   playerSnakeCreated = false;
   gameStarted = false;
 
@@ -68,8 +71,10 @@ export class GameScene extends Phaser.Scene {
       this.inputManager.bindSkills(playerSkills);
     }
 
-    // === Snake Renderer ===
-    this.snakeRenderer = new SnakeRenderer(this, this.pixelSize, this.gridWidth, this.gridHeight);
+    // === Snake Renderers ===
+    this.snakeRenderer = new SnakeRenderer(this, this.pixelSize);
+    this.appleRenderer = new AppleRenderer(this, this.pixelSize);
+    this.wallRenderer = new WallRenderer(this, this.pixelSize);
 
     this.gameStarted = true;
 
@@ -82,12 +87,13 @@ export class GameScene extends Phaser.Scene {
       this.walls = state.walls;
 
       // Apple
-      if (!this.apple) {
-        this.snakeRenderer.createApple(state.apple.x, state.apple.y);
-        this.apple = this.snakeRenderer.apple;
+      if (!this.appleRenderer) return;
+      if (!this.appleRenderer.apple) {
+          this.appleRenderer.create(state.apple.x, state.apple.y);
       } else {
-        this.snakeRenderer.updateApple(state.apple.x, state.apple.y);
+          this.appleRenderer.update(state.apple.x, state.apple.y);
       }
+
 
       // Snakes
       for (const id in state.snakes) {
@@ -104,7 +110,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      this.snakeRenderer.updateWalls(this.walls);
+      this.wallRenderer?.update(this.walls);
     });
 
     // Reset du joueur

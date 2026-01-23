@@ -12,5 +12,8 @@
     "express": "^5.2.1",
     "express-session": "^1.18.2",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

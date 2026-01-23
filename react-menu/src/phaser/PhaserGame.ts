@@ -23,6 +23,8 @@ export function launchPhaser(initData: GameInitData) {
     parent: phaserRoot,
     width: window.innerWidth,
     height: window.innerHeight,
+    pixelArt: true,
+    antialias: false,
     scene: [GameScene],
     scale: {
       mode: Phaser.Scale.RESIZE,

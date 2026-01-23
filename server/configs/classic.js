@@ -1,6 +1,6 @@
 module.exports = {
   server: {
-    tickRate: 50
+    tickRate: 100
   },
 
   game: {
