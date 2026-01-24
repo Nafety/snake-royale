@@ -15,6 +15,7 @@ export const SKILLS_DB = {
   wall: {
     bind: 'E',
     cost: 3,
+    distanceCells: 10,
     numberOfCells: 3,
     durationMs: 5000,
     cooldownMs: 10000,

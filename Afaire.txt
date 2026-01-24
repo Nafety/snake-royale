@@ -1,9 +1,6 @@
-- isoler waiting room de gameroom
-- créer un game abstract (update, get state abstract)
-- rajouter une fonction init abstraite et utiliser que les argu du constructeur dans celui celui
-- créer snakGame qui hérite de game
 - créer une class map (obstacle, border)
 - créer un map render coté front end
-- mettre dans la config le fait de se teleporter d'une cote à l'autre. (création de mur dans l'init du la game)
-
+- mettre la création de murs dans la map plutot que dans snakegame directement
 - interpolation serpent 
+- liste de startpos dans config plutot que une seule, puis parcourir cette liste a l'instanciation de chaque snake, en utilisant un indice d'instanec si ca existe ?
+- animation pour le mur progressive

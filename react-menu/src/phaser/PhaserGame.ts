@@ -4,6 +4,7 @@ import { GameScene } from "./game/GameScene";
 let game: Phaser.Game | null = null;
 
 export type Skill = { bind: string };
+
 export type GameInitData = {
   mode: string;
   config: any;
@@ -12,11 +13,18 @@ export type GameInitData = {
   loadout: string[];
 };
 
+/**
+ * 🚀 Lance une nouvelle instance Phaser
+ * (détruit proprement l’ancienne si elle existe)
+ */
 export function launchPhaser(initData: GameInitData) {
-  if (game) return;
-
   const phaserRoot = document.getElementById("phaser-root");
   if (!phaserRoot) return;
+
+  // 🔥 Sécurité : s’il reste un game, on le détruit
+  if (game) {
+    destroyPhaser();
+  }
 
   game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -25,24 +33,29 @@ export function launchPhaser(initData: GameInitData) {
     height: window.innerHeight,
     pixelArt: true,
     antialias: false,
-    scene: [GameScene],
+    backgroundColor: "#000000",
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-    backgroundColor: "#000000",
+    scene: [GameScene],
   });
 
   game.scene.start("GameScene", initData);
 }
 
+/**
+ * 🧹 Détruit complètement Phaser
+ * → déclenche SHUTDOWN des scenes
+ */
 export function destroyPhaser() {
   if (!game) return;
 
-  game.destroy(true); // true = remove canvas + events
+  game.destroy(true); // 🔥 appelle SHUTDOWN sur les scenes
   game = null;
 
-  // sécurité : vider le container
-  const root = document.getElementById("phaser-root");
-  if (root) root.innerHTML = "";
+  const phaserRoot = document.getElementById("phaser-root");
+  if (phaserRoot) {
+    phaserRoot.innerHTML = "";
+  }
 }

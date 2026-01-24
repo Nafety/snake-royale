@@ -1,222 +1,189 @@
-// server/index.js
-const GameRoom = require('../game/GameRoom');
 const path = require('path');
 const { SKILLS_DB } = require('../skills');
+
+// jeux disponibles
+const SnakeGame = require('../games/SnakeGame');
+const GameClasses = {
+  classic: SnakeGame,
+  deathmatch: SnakeGame,
+  // tetris: TetrisGame, ...
+};
+
+const WaitingRoom = require('../games/WaitingRoom');
 
 function getFrontGameConfig(gameConfig) {
   return {
     pixelSize: gameConfig.game.pixelSize,
     gridWidth: gameConfig.game.map.width,
     gridHeight: gameConfig.game.map.height,
-    paddingX: gameConfig.game.map.paddingX,
-    paddingY: gameConfig.game.map.paddingY,
     useSkills: gameConfig.game.useSkills
   };
 }
 
-const rooms = {};         // { roomId: GameRoom }
-const waitingRooms = {};  // { mode: [GameRoom] }
+const games = {};        // { gameId: Game }
+const waitingRooms = {}; // { mode: [WaitingRoom] }
 
-module.exports = function (io, sessionMiddleware) {
-  io.use((socket, next) => {
-    sessionMiddleware(socket.request, {}, next);
-  });
+module.exports = function(io, sessionMiddleware) {
+  io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 
   io.on('connection', socket => {
     console.log('🟢 Player connected', socket.id);
 
-    /* =========================
-       MENU
-    ========================= */
-
+    // --------------------------
+    // MENU
+    // --------------------------
     socket.on('enterMenu', () => {
       console.log(`📦 Player ${socket.id} enters menu`);
       socket.emit('skillsList', SKILLS_DB || {});
     });
 
-    /* =========================
-       JOIN GAME
-    ========================= */
-
+    // --------------------------
+    // JOIN GAME
+    // --------------------------
     socket.on('joinGame', ({ mode = 'classic', loadout = [] }) => {
-      console.log(
-        `🎮 Player ${socket.id} requests joinGame`,
-        { mode, loadout }
-      );
+      console.log(`🎮 Player ${socket.id} requests joinGame`, { mode, loadout });
 
-      // 🔒 sécurité : déjà dans une room ?
-      const alreadyInRoom = Object.values(rooms).find(
-        r => r.snakes[socket.id]
-      );
-      if (alreadyInRoom) {
-        console.warn(`⚠️ Player ${socket.id} already in a room`);
+      // Vérifier si déjà dans une game
+      const alreadyInGame = Object.values(games).find(g => g.snakes?.[socket.id]);
+      if (alreadyInGame) {
+        console.warn(`⚠️ Player ${socket.id} already in a game`);
         return;
       }
 
       try {
-        const configPath = path.join(
-          __dirname,
-          '..',
-          'configs',
-          `${mode}.js`
-        );
+        const configPath = path.join(__dirname, '..', 'configs', `${mode}.js`);
         const gameConfig = require(configPath);
-
-        const session = socket.request.session;
-        session.gameMode = mode;
-        session.gameConfig = gameConfig;
-        session.save();
-
         const frontConfig = getFrontGameConfig(gameConfig);
 
         if (!waitingRooms[mode]) waitingRooms[mode] = [];
 
-        // Chercher une room en attente
-        let room = waitingRooms[mode].find(
-          r => !r.started &&
-            Object.keys(r.snakes).length < gameConfig.maxPlayers
-        );
+        // Chercher une waiting room dispo
+        let room = waitingRooms[mode].find(r => r.players.size < gameConfig.maxPlayers);
 
-        // Créer une room si besoin
         if (!room) {
-          const roomId = `room-${Date.now()}`;
-
-          room = new GameRoom(gameConfig, SKILLS_DB);
-          room.id = roomId;
+          room = new WaitingRoom(gameConfig, SKILLS_DB);
+          room.id = `room-${Date.now()}`;
           room.mode = mode;
-          room.started = false;
-
           waitingRooms[mode].push(room);
-          rooms[roomId] = room;
-
-          console.log(`🆕 Room ${roomId} created for mode ${mode}`);
+          console.log(`🆕 WaitingRoom ${room.id} created for mode ${mode}`);
         }
 
-        // Ajouter le joueur
-        room.addPlayer(socket.id, loadout);
+        // Ajouter le joueur à la waiting room
+        room.addPlayer(socket.id);
+        room.setLayout(socket.id, loadout);
         socket.join(room.id);
 
-        console.log(
-          `👤 Player ${socket.id} joined room ${room.id} ` +
-          `(${Object.keys(room.snakes).length}/${gameConfig.maxPlayers})`
-        );
+        console.log(`👤 Player ${socket.id} joined WaitingRoom ${room.id} (${room.players.size}/${gameConfig.maxPlayers})`);
 
-        // Démarrer la partie si room complète
-        if (Object.keys(room.snakes).length === gameConfig.maxPlayers) {
-          room.started = true;
+        // Démarrer la partie si full
+        if (room.players.size === gameConfig.maxPlayers) {
+          console.log(`🚀 WaitingRoom ${room.id} is full → starting game`);
+          const gameData = room.exportGameData();
 
-          Object.keys(room.snakes).forEach(playerId => {
-            const playerLoadout = room.getPlayerLoadout(playerId);
+          const GameClass = GameClasses[mode];
+          if (!GameClass) throw new Error(`Game class for mode "${mode}" not found`);
 
+          const game = new GameClass(gameConfig, SKILLS_DB);
+          game.init(gameData);
+          game.id = room.id;
+          game.mode = mode;
+
+          // Stocker la game
+          games[game.id] = game;
+
+          // Retirer la waiting room
+          waitingRooms[mode] = waitingRooms[mode].filter(r => r !== room);
+
+          // Démarrer le jeu côté client
+          gameData.players.forEach(playerId => {
             io.to(playerId).emit('start', {
               mode,
               config: frontConfig,
               playerId,
-              skills: room.skills,
-              loadout: playerLoadout
+              skills: SKILLS_DB,
+              loadout: gameData.layouts[playerId]
             });
           });
 
-          console.log(
-            `🚀 Room ${room.id} started with players:`,
-            Object.keys(room.snakes)
-          );
+          // --------------------------
+          // Game loop générique
+          // --------------------------
+          game.interval = setInterval(() => {
+            game.update();
 
-          room.interval = setInterval(() => {
-            room.update();
+            // Stopper la partie si plus de snakes
+            if (Object.keys(game.snakes).length === 0) {
+              console.log(`🏁 Game ${game.id} finished (all players left)`);
+              clearInterval(game.interval);
+              delete games[game.id];
+              io.to(game.id).emit('stopped');
+              return;
+            }
 
-            room.resetThisFrame.forEach(socketId => {
-              io.to(socketId).emit('playerReset');
-            });
+            io.to(game.id).emit('state', game.getState());
+          }, gameConfig.server.tickRate);
 
-            io.to(room.id).emit('state', room.getState());
-          }, room.config.server.tickRate);
-
-          // retirer de la file d'attente
-          waitingRooms[mode] = waitingRooms[mode].filter(r => r !== room);
+          console.log(`🎯 Game ${game.id} started`);
         } else {
           socket.emit('waiting', { roomId: room.id });
         }
-
       } catch (err) {
         console.error(`❌ Error loading config for mode ${mode}`, err);
         socket.emit('error', { message: 'Invalid game mode' });
       }
     });
 
-    /* =========================
-       LEAVE GAME (retour menu)
-    ========================= */
+    // --------------------------
+    // INPUT / SKILLS
+    // --------------------------
+    socket.on('input', input => {
+      const game = Object.values(games).find(g => g.snakes?.[socket.id]);
+      if (!game || typeof game.setInput !== 'function') return;
+      game.setInput(socket.id, input);
+    });
 
+    socket.on('useSkill', ({ skill, targetId }) => {
+      const game = Object.values(games).find(g => g.snakes?.[socket.id]);
+      if (!game || typeof game.useSkill !== 'function') return;
+      game.useSkill(socket.id, skill, targetId);
+    });
+
+    // --------------------------
+    // LEAVE GAME
+    // --------------------------
     socket.on('leaveGame', () => {
-      const room = Object.values(rooms).find(
-        r => r.snakes[socket.id]
-      );
-      if (!room) return;
+      const game = Object.values(games).find(g => g.snakes?.[socket.id]);
+      if (!game) return;
 
-      console.log(`🚪 Player ${socket.id} leaves room ${room.id}`);
+      delete game.snakes[socket.id];
+      socket.leave(game.id);
 
-      room.removePlayer(socket.id);
-      socket.leave(room.id);
-
-      const mode = room.mode || 'classic';
-
-      if (Object.keys(room.snakes).length === 0) {
-        clearInterval(room.interval);
-        delete rooms[room.id];
-        waitingRooms[mode] =
-          waitingRooms[mode]?.filter(r => r !== room) || [];
-        console.log(`🗑️ Room ${room.id} deleted`);
-      } else if (!room.started && !waitingRooms[mode].includes(room)) {
-        waitingRooms[mode].push(room);
-        console.log(`⏳ Room ${room.id} back to waiting`);
+      if (Object.keys(game.snakes).length === 0) {
+        console.log(`🗑️ Game ${game.id} finished (all players left)`);
+        clearInterval(game.interval);
+        delete games[game.id];
+        io.to(game.id).emit('stopped');
       }
     });
 
-    /* =========================
-       INPUT / SKILLS
-    ========================= */
-
-    socket.on('input', dir => {
-      const room = Object.values(rooms).find(
-        r => r.snakes[socket.id]
-      );
-      if (room) room.setInput(socket.id, dir);
-    });
-
-    socket.on('useSkill', ({ skill }) => {
-      const room = Object.values(rooms).find(
-        r => r.snakes[socket.id]
-      );
-      if (!room) return;
-
-      room.useSkill(socket.id, skill);
-    });
-
-    /* =========================
-       DISCONNECT (onglet fermé)
-    ========================= */
-
+    // --------------------------
+    // DISCONNECT
+    // --------------------------
     socket.on('disconnect', () => {
-      const room = Object.values(rooms).find(
-        r => r.snakes[socket.id]
-      );
-      if (!room) return;
-
-      room.removePlayer(socket.id);
-
-      const mode = room.mode || 'classic';
-
-      if (Object.keys(room.snakes).length === 0) {
-        clearInterval(room.interval);
-        delete rooms[room.id];
-        waitingRooms[mode] =
-          waitingRooms[mode]?.filter(r => r !== room) || [];
-      } else if (!room.started && !waitingRooms[mode].includes(room)) {
-        waitingRooms[mode].push(room);
-      }
-
       console.log(`🔴 Player disconnected ${socket.id}`);
+
+      const game = Object.values(games).find(g => g.snakes?.[socket.id]);
+      if (!game) return;
+
+      delete game.snakes[socket.id];
+      socket.leave(game.id);
+
+      if (Object.keys(game.snakes).length === 0) {
+        console.log(`🗑️ Game ${game.id} finished (all players left)`);
+        clearInterval(game.interval);
+        delete games[game.id];
+        io.to(game.id).emit('stopped');
+      }
     });
   });
 };

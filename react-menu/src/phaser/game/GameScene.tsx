@@ -1,4 +1,3 @@
-// src/phaser/GameScene.ts
 import Phaser from "phaser";
 import { InputManager } from "./InputManager";
 import { SnakeRenderer } from "./renderers/SnakeRenderer";
@@ -6,7 +5,11 @@ import { AppleRenderer } from "./renderers/AppleRenderer";
 import { WallRenderer } from "./renderers/WallRenderer";
 import { socketManager } from "../socket/SocketManager";
 
+/* =========================
+        TYPES
+========================= */
 export type Skill = { bind: string };
+
 export type InitData = {
   mode: string;
   config: any;
@@ -15,89 +18,151 @@ export type InitData = {
   playerId?: string;
 };
 
-type SnakeState = { body: { x: number; y: number }[] };
-type GameState = { snakes: Record<string, SnakeState>; walls: any[]; apple: { x: number; y: number } };
+type GridPos = { x: number; y: number };
 
+type SnakeState = {
+  body: GridPos[];
+  items: GridPos[];
+  frozen: boolean;
+  effects: Record<string, any>;
+  length: number;
+  cooldowns: Record<string, number>;
+};
+
+type GameState = {
+  snakes: Record<string, SnakeState>;
+  walls: any;
+  apple: GridPos;
+};
+
+/* =========================
+        SCENE
+========================= */
 export class GameScene extends Phaser.Scene {
+  // ----- init data -----
   mode!: string;
   config: any;
   skills: Record<string, Skill> = {};
   playerLoadout: string[] = [];
   playerId: string | null = null;
 
-  inputManager: InputManager | null = null;
-  snakeRenderer: SnakeRenderer | null = null;
-  appleRenderer: AppleRenderer | null = null;
-  wallRenderer: WallRenderer | null = null;
+  // ----- systems -----
+  inputManager?: InputManager;
+  snakeRenderer?: SnakeRenderer;
+  appleRenderer?: AppleRenderer;
+  wallRenderer?: WallRenderer;
+
+  // ----- state -----
   snakesData: Record<string, SnakeState> = {};
-  walls: any[] = [];
+  walls: any = { items: [], borders: [] };
+
   playerSnakeCreated = false;
   gameStarted = false;
+  selectedSnakeId: string | null = null;
 
   pixelSize = 0;
   gridWidth = 0;
   gridHeight = 0;
 
+  // ----- socket handlers (refs stables) -----
+  private handleState!: (state: GameState) => void;
+  private handlePlayerReset!: () => void;
+
   constructor() {
     super({ key: "GameScene" });
-    console.log("[GameScene] constructor called");
   }
 
+  /* =========================
+          INIT
+  ========================= */
   init(data: InitData) {
-    console.log("[GameScene] init", data);
     this.mode = data.mode;
     this.config = data.config;
     this.skills = data.skills;
     this.playerLoadout = data.loadout;
-    this.playerId = data.playerId || null;
+    this.playerId = data.playerId ?? null;
 
     this.gridWidth = this.config.gridWidth;
     this.gridHeight = this.config.gridHeight;
-    this.calculatePixelSize(window.innerWidth, window.innerHeight);
+
+    this.pixelSize = Math.floor(
+      Math.min(
+        window.innerWidth / this.gridWidth,
+        window.innerHeight / this.gridHeight
+      )
+    );
   }
 
+  /* =========================
+          CREATE
+  ========================= */
   create() {
-    console.log("[GameScene] create called");
+    /* ---------- SHUTDOWN SAFE ---------- */
+    this.events.once(
+      Phaser.Scenes.Events.SHUTDOWN,
+      this.onShutdown,
+      this
+    );
 
-    // === Input Manager ===
+    /* ---------- INPUT ---------- */
     this.inputManager = new InputManager(this);
 
-    // Bind dynamique des skills du joueur
-    if (this.inputManager) {
-      const playerSkills: Record<string, Skill> = {};
-      this.playerLoadout.forEach(skillId => {
-        if (this.skills[skillId]) playerSkills[skillId] = this.skills[skillId];
-      });
-      this.inputManager.bindSkills(playerSkills);
+    if (this.config.useSkills) {
+      const boundSkills: Record<string, Skill> = {};
+      for (const id of this.playerLoadout) {
+        if (this.skills[id]) boundSkills[id] = this.skills[id];
+      }
+      this.inputManager.bindSkills(boundSkills);
     }
 
-    // === Snake Renderers ===
+    /* ---------- RENDERERS ---------- */
     this.snakeRenderer = new SnakeRenderer(this, this.pixelSize);
     this.appleRenderer = new AppleRenderer(this, this.pixelSize);
     this.wallRenderer = new WallRenderer(this, this.pixelSize);
 
     this.gameStarted = true;
 
-    // === Socket events ===
-    socketManager.on("state", (state: GameState) => {
-      console.log("[GameScene] state received", state);
-      if (!this.snakeRenderer || !this.gameStarted) return;
+    /* ---------- POINTER ---------- */
+    this.input.on("pointerdown", pointer => {
+      if (!this.sys || !this.sys.isActive()) return;
+
+      const x = Math.floor(pointer.x / this.pixelSize);
+      const y = Math.floor(pointer.y / this.pixelSize);
+
+      let target: string | null = null;
+
+      for (const id in this.snakesData) {
+        if (id === this.playerId) continue;
+        if (this.snakesData[id].body.some(p => p.x === x && p.y === y)) {
+          target = id;
+          break;
+        }
+      }
+
+      this.selectedSnakeId = target;
+      this.snakeRenderer?.highlightSnake(target);
+    });
+
+    /* ---------- SOCKETS ---------- */
+    this.handleState = (state: GameState) => {
+      // 🛑 scène détruite ou inactive → IGNORE
+      if (!this.sys || !this.sys.isActive()) return;
+      if (!this.snakeRenderer || !this.appleRenderer || !this.wallRenderer) return;
 
       this.snakesData = state.snakes;
       this.walls = state.walls;
 
-      // Apple
-      if (!this.appleRenderer) return;
+      /* ----- APPLE ----- */
       if (!this.appleRenderer.apple) {
-          this.appleRenderer.create(state.apple.x, state.apple.y);
+        this.appleRenderer.create(state.apple.x, state.apple.y);
       } else {
-          this.appleRenderer.update(state.apple.x, state.apple.y);
+        this.appleRenderer.update(state.apple.x, state.apple.y);
       }
 
-
-      // Snakes
+      /* ----- SNAKES ----- */
       for (const id in state.snakes) {
         const snake = state.snakes[id];
+
         if (id === this.playerId) {
           if (!this.playerSnakeCreated) {
             const head = snake.body.at(-1)!;
@@ -106,40 +171,74 @@ export class GameScene extends Phaser.Scene {
           }
           this.snakeRenderer.updatePlayerBody(snake.body);
         } else {
-          this.snakeRenderer.updateOtherSnakes({ [id]: snake }, this.playerId!);
+          this.snakeRenderer.updateOtherSnakes(
+            { [id]: snake },
+            this.playerId!
+          );
         }
       }
 
-      this.wallRenderer?.update(this.walls);
-    });
+      /* ----- WALLS ----- */
+      this.wallRenderer.update(
+        this.walls,
+        Object.values(state.snakes).map(s => ({ items: s.items }))
+      );
+    };
 
-    // Reset du joueur
-    socketManager.on("playerReset", () => {
-      console.log("[GameScene] playerReset received");
-      if (this.inputManager) {
-        this.inputManager.lastDirection = { x: 0, y: 0 };
-        this.inputManager.skillQueue = []; // vider la queue des skills
-      }
-    });
+    this.handlePlayerReset = () => {
+      if (!this.inputManager) return;
+      this.inputManager.lastDirection = { x: 0, y: 0 };
+      this.inputManager.skillQueue = [];
+    };
+
+    socketManager.on("state", this.handleState);
+    socketManager.on("playerReset", this.handlePlayerReset);
   }
 
+  /* =========================
+          UPDATE
+  ========================= */
   update() {
+    if (!this.sys || !this.sys.isActive()) return;
     if (!this.gameStarted || !this.playerSnakeCreated) return;
 
-    // Direction
     if (this.inputManager?.update()) {
       socketManager.emit("input", this.inputManager.getDirection());
     }
 
-    // Skills
     while (this.inputManager?.hasSkillInput()) {
       const skill = this.inputManager.consumeSkillInput();
-      socketManager.emit("useSkill", { skill });
+      socketManager.emit("useSkill", {
+        skill,
+        targetId: this.selectedSnakeId,
+      });
     }
   }
 
-  private calculatePixelSize(width: number, height: number) {
-    this.pixelSize = Math.floor(Math.min(width / this.gridWidth, height / this.gridHeight));
-    console.log("[GameScene] calculatePixelSize", this.pixelSize);
+  /* =========================
+          SHUTDOWN
+  ========================= */
+  private onShutdown() {
+    // sockets
+    socketManager.off("state", this.handleState);
+    socketManager.off("playerReset", this.handlePlayerReset);
+
+    // input
+    this.input.removeAllListeners();
+
+    // renderers
+    this.snakeRenderer?.destroy();
+    this.appleRenderer?.destroy();
+    this.wallRenderer?.destroy();
+
+    // cleanup refs
+    this.inputManager = undefined;
+    this.snakeRenderer = undefined;
+    this.appleRenderer = undefined;
+    this.wallRenderer = undefined;
+
+    this.gameStarted = false;
+    this.playerSnakeCreated = false;
+    this.selectedSnakeId = null;
   }
 }

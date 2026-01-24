@@ -15,17 +15,17 @@ export default function GameManager() {
   };
 
   const quitGame = () => {
-    socketManager.emit("leaveGame"); // important pour le serveur
-    setGameData(null);
+    socketManager.emit("leaveGame"); // important côté serveur
+    setGameData(null);               // 👉 déclenche destroy Phaser
   };
 
+  // 🎮 Lifecycle Phaser
   useEffect(() => {
-    if (gameData) {
-      launchPhaser(gameData);
-    } else {
-      destroyPhaser();
-    }
+    if (!gameData) return;
 
+    launchPhaser(gameData);
+
+    // cleanup uniquement quand on quitte la game
     return () => {
       destroyPhaser();
     };
@@ -33,12 +33,14 @@ export default function GameManager() {
 
   return (
     <>
+      {/* MENU */}
       {!gameData && (
         <div style={{ position: "absolute", inset: 0, zIndex: 10 }}>
           <Menu onStart={startGame} />
         </div>
       )}
 
+      {/* BOUTON QUITTER */}
       {gameData && (
         <button
           style={{

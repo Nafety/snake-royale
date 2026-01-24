@@ -39,4 +39,11 @@ export class AppleRenderer {
     const pos = this.gridToPixels({ x, y });
     this.apple.setPosition(pos.x, pos.y);
   }
+
+  destroy() {
+    if (this.apple) {
+      this.apple.destroy();
+      this.apple = null;
+    }
+  }
 }
