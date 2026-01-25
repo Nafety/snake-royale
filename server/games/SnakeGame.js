@@ -2,28 +2,24 @@
 const Game = require('./Game');
 const Snake = require('../entities/Snake');
 const Apple = require('../entities/Apple');
-const Walls = require('../entities/Walls');
+const Map = require('../entities/Map'); // nouvelle Map
 const { collide } = require('./collisions');
 
 class SnakeGame extends Game {
   constructor(config, skillsDB) {
     super(config);
 
-    // Dépendances
     this.skills = skillsDB;
-
-    // État du jeu
     this.snakes = {};
     this.resetThisFrame = new Set();
 
-    // Objets globaux
-    this.walls = new Walls(config, this.skills);
+    // Au lieu de walls, on instancie une Map
+    this.map = new Map(config, skillsDB);
+
+    // Apple reste géré dynamiquement ici
     this.apple = new Apple(config);
   }
 
-  /**
-   * Initialisation de la partie
-   */
   init(gameData) {
     console.log('🐍 SnakeGame init with players:', gameData.players);
 
@@ -33,7 +29,6 @@ class SnakeGame extends Game {
       this.snakes[playerId] = snake;
     }
   }
-
 
   /* ================================
      INPUT
@@ -50,21 +45,22 @@ class SnakeGame extends Game {
   update() {
     const { config } = this;
     const now = Date.now();
-    // déplacer les serpents
+
+    // déplacer les snakes
     for (const id in this.snakes) {
       const snake = this.snakes[id];
-      snake.updateWalls(now); // supprime les murs expirés
+      snake.updateWalls(now); // murs dynamiques des snakes
       if (!snake.isFrozen || !snake.isFrozen()) {
         snake.move(config);
       }
     }
 
-    // gérer toutes les collisions
+    // collisions
     this.checkCollisions();
   }
 
   /* ================================
-     COLLISIONS (snakes, murs, pomme)
+     COLLISIONS
   ================================ */
   checkCollisions() {
     const { config } = this;
@@ -74,22 +70,19 @@ class SnakeGame extends Game {
       const A = this.snakes[ids[i]];
       const headA = A.head();
 
-      // 💥 collision avec son corps
+      // collision avec son corps
       if (config.game.snake.selfCollision && A.body.length > 1) {
-        const headA = A.head();
-        // on ignore les segments qui ont exactement les mêmes coordonnées que la tête
         for (const seg of A.body.slice(0, -1)) {
-          if (seg.x === headA.x && seg.y === headA.y) continue; // skip overlap init
+          if (seg.x === headA.x && seg.y === headA.y) continue;
           if (collide(headA, seg, config.game.gridSize)) {
             console.log(`💥 Player ${ids[i]} collided with self`);
             A.reset(config);
             break;
-          } 
+          }
         }
       }
 
-
-      // 💥 collision avec les autres serpents
+      // collision avec les autres snakes
       for (let j = 0; j < ids.length; j++) {
         if (i === j) continue;
         const B = this.snakes[ids[j]];
@@ -101,15 +94,15 @@ class SnakeGame extends Game {
         }
       }
 
-      // 💥 collision avec les murs
-      for (const wall of this.walls.borders) {
+      // collision avec les murs de la map
+      for (const wall of this.map.walls.borders) {
         if (collide(headA, wall, config.game.gridSize)) {
           console.log(`💥 Player ${ids[i]} collided with a wall`);
           A.reset(config);
         }
       }
 
-      // 💥 collision avec les murs des snakes
+      // collision avec les murs des snakes
       for (let j = 0; j < ids.length; j++) {
         const B = this.snakes[ids[j]];
         for (const wall of B.items) {
@@ -120,7 +113,7 @@ class SnakeGame extends Game {
         }
       }
 
-      // 🍎 collision avec la pomme
+      // collision avec la pomme
       if (collide(headA, this.apple.pos, config.game.gridSize)) {
         console.log(`🍎 Player ${ids[i]} ate the apple`);
         A.grow();
@@ -129,21 +122,19 @@ class SnakeGame extends Game {
     }
   }
 
-/* ================================
-   SKILLS
-================================ */
-useSkill(playerId, skill, targetId = null) {
-  console.log(`[SNAKE GAME=]🪄 Player ${playerId} attempts to use skill ${skill} on target ${targetId || 'none'}`);
-  const snake = this.snakes[playerId];
-  if (!snake || !snake.hasSkill(skill)) return;
+  /* ================================
+     SKILLS
+  ================================ */
+  useSkill(playerId, skill, targetId = null) {
+    console.log(`[SNAKE GAME=]🪄 Player ${playerId} attempts to use skill ${skill} on target ${targetId || 'none'}`);
+    const snake = this.snakes[playerId];
+    if (!snake || !snake.hasSkill(skill)) return;
 
-  // récupérer le snake ciblé si fourni
-  let targetSnake = null;
-  if (targetId && this.snakes[targetId]) {
-    targetSnake = this.snakes[targetId];
+    let targetSnake = null;
+    if (targetId && this.snakes[targetId]) targetSnake = this.snakes[targetId];
+
+    snake.useSkill(skill, targetSnake);
   }
-  snake.useSkill(skill, targetSnake);
-}
 
   /* ================================
      ÉTAT PUBLIC
@@ -157,7 +148,7 @@ useSkill(playerId, skill, targetId = null) {
     return {
       snakes: snakesState,
       apple: this.apple.pos,
-      walls: this.walls.getState()
+      map:this.map.getState(),
     };
   }
 }

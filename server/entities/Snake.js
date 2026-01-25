@@ -65,7 +65,7 @@ class Snake {
       case 'freeze':
         return this._freeze();
       case 'wall':
-        console.log(`🧱 ${this.id || 'player'} attempts to use wall skill on target ${targetSnake ? targetSnake.id || 'unknown' : 'none'}`);
+        console.log(`🧱 ${this.id || 'player'} attempts to use wall skill on target ${targetSnake ? targetSnake || 'unknown' : 'none'}`);
         return this._wall(targetSnake);
       default:
         return false;
@@ -172,7 +172,7 @@ class Snake {
     this.items = this.items.filter(w => !w.expiresAt || w.expiresAt > now);
     const removed = before - this.items.length;
     if (removed > 0) {
-      console.log(`🧱 ${this.id} removed ${removed} expired wall(s)`);
+      console.log(`🧱 ${this} removed ${removed} expired wall(s)`);
     }
   }
 

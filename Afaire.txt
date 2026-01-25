@@ -1,6 +1,3 @@
-- créer une class map (obstacle, border)
-- créer un map render coté front end
-- mettre la création de murs dans la map plutot que dans snakegame directement
+- ajouter spawn points a la map, et les utiliser pour faire spawn les snakes
 - interpolation serpent 
-- liste de startpos dans config plutot que une seule, puis parcourir cette liste a l'instanciation de chaque snake, en utilisant un indice d'instanec si ca existe ?
 - animation pour le mur progressive

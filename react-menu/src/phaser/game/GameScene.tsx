@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { InputManager } from "./InputManager";
 import { SnakeRenderer } from "./renderers/SnakeRenderer";
 import { AppleRenderer } from "./renderers/AppleRenderer";
-import { WallRenderer } from "./renderers/WallRenderer";
+import { MapRenderer } from "./renderers/MapRenderer";
 import { socketManager } from "../socket/SocketManager";
 
 /* =========================
@@ -29,11 +29,18 @@ type SnakeState = {
   cooldowns: Record<string, number>;
 };
 
+type MapState = {
+  borders: GridPos[];
+  // plus tard:
+  // obstacles?: GridPos[];
+};
+
 type GameState = {
   snakes: Record<string, SnakeState>;
-  walls: any;
+  map: MapState;
   apple: GridPos;
 };
+
 
 /* =========================
         SCENE
@@ -50,11 +57,11 @@ export class GameScene extends Phaser.Scene {
   inputManager?: InputManager;
   snakeRenderer?: SnakeRenderer;
   appleRenderer?: AppleRenderer;
-  wallRenderer?: WallRenderer;
+  mapRenderer?: MapRenderer;
 
   // ----- state -----
   snakesData: Record<string, SnakeState> = {};
-  walls: any = { items: [], borders: [] };
+  mapRendered = false;
 
   playerSnakeCreated = false;
   gameStarted = false;
@@ -64,7 +71,7 @@ export class GameScene extends Phaser.Scene {
   gridWidth = 0;
   gridHeight = 0;
 
-  // ----- socket handlers (refs stables) -----
+  // ----- socket handlers -----
   private handleState!: (state: GameState) => void;
   private handlePlayerReset!: () => void;
 
@@ -97,12 +104,7 @@ export class GameScene extends Phaser.Scene {
           CREATE
   ========================= */
   create() {
-    /* ---------- SHUTDOWN SAFE ---------- */
-    this.events.once(
-      Phaser.Scenes.Events.SHUTDOWN,
-      this.onShutdown,
-      this
-    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
 
     /* ---------- INPUT ---------- */
     this.inputManager = new InputManager(this);
@@ -116,21 +118,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     /* ---------- RENDERERS ---------- */
+    this.mapRenderer = new MapRenderer(this, this.pixelSize);
     this.snakeRenderer = new SnakeRenderer(this, this.pixelSize);
     this.appleRenderer = new AppleRenderer(this, this.pixelSize);
-    this.wallRenderer = new WallRenderer(this, this.pixelSize);
 
     this.gameStarted = true;
 
-    /* ---------- POINTER ---------- */
+    /* ---------- POINTER (target snake) ---------- */
     this.input.on("pointerdown", pointer => {
-      if (!this.sys || !this.sys.isActive()) return;
+      if (!this.sys?.isActive()) return;
 
       const x = Math.floor(pointer.x / this.pixelSize);
       const y = Math.floor(pointer.y / this.pixelSize);
 
       let target: string | null = null;
-
       for (const id in this.snakesData) {
         if (id === this.playerId) continue;
         if (this.snakesData[id].body.some(p => p.x === x && p.y === y)) {
@@ -145,12 +146,16 @@ export class GameScene extends Phaser.Scene {
 
     /* ---------- SOCKETS ---------- */
     this.handleState = (state: GameState) => {
-      // 🛑 scène détruite ou inactive → IGNORE
-      if (!this.sys || !this.sys.isActive()) return;
-      if (!this.snakeRenderer || !this.appleRenderer || !this.wallRenderer) return;
+      if (!this.sys?.isActive()) return;
+      if (!this.snakeRenderer || !this.appleRenderer || !this.mapRenderer) return;
 
       this.snakesData = state.snakes;
-      this.walls = state.walls;
+
+      /* ----- MAP (STATIC, ONCE) ----- */
+      if (!this.mapRendered) {
+        this.mapRenderer.render(state.map.borders);
+        this.mapRendered = true;
+      }
 
       /* ----- APPLE ----- */
       if (!this.appleRenderer.apple) {
@@ -159,30 +164,17 @@ export class GameScene extends Phaser.Scene {
         this.appleRenderer.update(state.apple.x, state.apple.y);
       }
 
-      /* ----- SNAKES ----- */
+      /* ----- SNAKES + SNAKE WALLS ----- */
       for (const id in state.snakes) {
-        const snake = state.snakes[id];
-
-        if (id === this.playerId) {
-          if (!this.playerSnakeCreated) {
-            const head = snake.body.at(-1)!;
-            this.snakeRenderer.createPlayerSnake(head.x, head.y);
-            this.playerSnakeCreated = true;
-          }
-          this.snakeRenderer.updatePlayerBody(snake.body);
-        } else {
-          this.snakeRenderer.updateOtherSnakes(
-            { [id]: snake },
-            this.playerId!
-          );
+        const snakeState = state.snakes[id];
+        const isPlayer = id === this.playerId;
+        
+        if (isPlayer && !this.playerSnakeCreated) {
+          this.playerSnakeCreated = true;
         }
-      }
 
-      /* ----- WALLS ----- */
-      this.wallRenderer.update(
-        this.walls,
-        Object.values(state.snakes).map(s => ({ items: s.items }))
-      );
+        this.snakeRenderer.updateSnake(id, snakeState, isPlayer);
+      }
     };
 
     this.handlePlayerReset = () => {
@@ -199,7 +191,7 @@ export class GameScene extends Phaser.Scene {
           UPDATE
   ========================= */
   update() {
-    if (!this.sys || !this.sys.isActive()) return;
+    if (!this.sys?.isActive()) return;
     if (!this.gameStarted || !this.playerSnakeCreated) return;
 
     if (this.inputManager?.update()) {
@@ -219,26 +211,23 @@ export class GameScene extends Phaser.Scene {
           SHUTDOWN
   ========================= */
   private onShutdown() {
-    // sockets
     socketManager.off("state", this.handleState);
     socketManager.off("playerReset", this.handlePlayerReset);
 
-    // input
     this.input.removeAllListeners();
 
-    // renderers
     this.snakeRenderer?.destroy();
     this.appleRenderer?.destroy();
-    this.wallRenderer?.destroy();
+    this.mapRenderer?.destroy();
 
-    // cleanup refs
     this.inputManager = undefined;
     this.snakeRenderer = undefined;
     this.appleRenderer = undefined;
-    this.wallRenderer = undefined;
+    this.mapRenderer = undefined;
 
     this.gameStarted = false;
     this.playerSnakeCreated = false;
     this.selectedSnakeId = null;
+    this.mapRendered = false;
   }
 }
